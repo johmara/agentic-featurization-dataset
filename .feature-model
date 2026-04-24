@@ -1,6 +1,7 @@
 ReferenceManager
     Database
     ApiDocs
+    Versioning
     Papers
         CreatePaper
         GetPaper

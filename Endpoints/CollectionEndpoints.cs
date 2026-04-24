@@ -2,18 +2,23 @@ using Microsoft.EntityFrameworkCore;
 using ReferenceManager.Data;
 using ReferenceManager.Models;
 using ReferenceManager.Requests;
+using ReferenceManager.Responses;
 
 namespace ReferenceManager.Endpoints;
 
 public static class CollectionEndpoints
 {
-    public static void MapCollectionEndpoints(this WebApplication app)
+    public static void MapCollectionEndpoints(this IEndpointRouteBuilder app)
     {
         // &begin[GetCollection]
-        app.MapGet("/collections", async (AppDbContext db) =>
-            await db.Collections.ToListAsync())
-            .WithName("ListCollections")
-            .WithOpenApi();
+        app.MapGet("/collections", async (AppDbContext db, int limit = 25, int offset = 0) =>
+        {
+            var total = await db.Collections.CountAsync();
+            var items = await db.Collections.Skip(offset).Take(limit).ToListAsync();
+            return Results.Ok(new PagedResult<Collection>(items, total, limit, offset));
+        })
+        .WithName("ListCollections")
+        .WithOpenApi();
 
         app.MapGet("/collections/{id:int}", async (int id, AppDbContext db) =>
             await db.Collections.AsNoTracking().Include(c => c.Papers).FirstOrDefaultAsync(c => c.Id == id) is Collection col
@@ -29,7 +34,7 @@ public static class CollectionEndpoints
             var col = new Collection { Name = req.Name, Description = req.Description };
             db.Collections.Add(col);
             await db.SaveChangesAsync();
-            return Results.Created($"/collections/{col.Id}", col);
+            return Results.Created($"/api/v1/collections/{col.Id}", col);
         })
         .WithName("CreateCollection")
         .WithOpenApi();

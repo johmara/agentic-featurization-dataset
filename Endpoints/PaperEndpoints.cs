@@ -2,18 +2,23 @@ using Microsoft.EntityFrameworkCore;
 using ReferenceManager.Data;
 using ReferenceManager.Models;
 using ReferenceManager.Requests;
+using ReferenceManager.Responses;
 
 namespace ReferenceManager.Endpoints;
 
 public static class PaperEndpoints
 {
-    public static void MapPaperEndpoints(this WebApplication app)
+    public static void MapPaperEndpoints(this IEndpointRouteBuilder app)
     {
         // &begin[GetPaper]
-        app.MapGet("/papers", async (AppDbContext db) =>
-            await db.Papers.ToListAsync())
-            .WithName("ListPapers")
-            .WithOpenApi();
+        app.MapGet("/papers", async (AppDbContext db, int limit = 25, int offset = 0) =>
+        {
+            var total = await db.Papers.CountAsync();
+            var items = await db.Papers.Skip(offset).Take(limit).ToListAsync();
+            return Results.Ok(new PagedResult<Paper>(items, total, limit, offset));
+        })
+        .WithName("ListPapers")
+        .WithOpenApi();
 
         app.MapGet("/papers/{id:int}", async (int id, AppDbContext db) =>
             await db.Papers.FindAsync(id) is Paper paper
@@ -36,7 +41,7 @@ public static class PaperEndpoints
             };
             db.Papers.Add(paper);
             await db.SaveChangesAsync();
-            return Results.Created($"/papers/{paper.Id}", paper);
+            return Results.Created($"/api/v1/papers/{paper.Id}", paper);
         })
         .WithName("CreatePaper")
         .WithOpenApi();
