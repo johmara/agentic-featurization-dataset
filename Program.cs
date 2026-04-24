@@ -44,7 +44,7 @@ app.MapPost("/papers", async (PaperRequest req, AppDbContext db) =>
     var paper = new Paper
     {
         Title = req.Title,
-        Authors = req.Authors,
+        Authors = req.Authors.Select(ToAuthor).ToList(),
         Year = req.Year,
         Abstract = req.Abstract,
         Doi = req.Doi
@@ -63,7 +63,7 @@ app.MapPut("/papers/{id:int}", async (int id, PaperRequest req, AppDbContext db)
     if (paper is null) return Results.NotFound();
 
     paper.Title = req.Title;
-    paper.Authors = req.Authors;
+    paper.Authors = req.Authors.Select(ToAuthor).ToList();
     paper.Year = req.Year;
     paper.Abstract = req.Abstract;
     paper.Doi = req.Doi;
@@ -88,4 +88,13 @@ app.MapDelete("/papers/{id:int}", async (int id, AppDbContext db) =>
 
 app.Run();
 
-record PaperRequest(string Title, List<string> Authors, int Year, string? Abstract, string? Doi);
+static Author ToAuthor(AuthorRequest r) => new()
+{
+    Name = r.Name,
+    Email = r.Email,
+    Affiliations = r.Affiliations.Select(a => new Affiliation { Name = a.Name, Country = a.Country, City = a.City }).ToList()
+};
+
+record AffiliationRequest(string Name, string Country, string City);
+record AuthorRequest(string Name, string? Email, List<AffiliationRequest> Affiliations);
+record PaperRequest(string Title, List<AuthorRequest> Authors, int Year, string? Abstract, string? Doi);
