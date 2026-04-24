@@ -1,5 +1,6 @@
 ReferenceManager
     Database
+    ApiDocs
     Papers
         CreatePaper
         GetPaper

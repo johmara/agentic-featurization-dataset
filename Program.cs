@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ReferenceManager.Data;
 using ReferenceManager.Models;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,8 +14,13 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 var app = builder.Build();
 
+// &begin[ApiDocs]
 if (app.Environment.IsDevelopment())
+{
     app.MapOpenApi();
+    app.MapScalarApiReference(options => options.WithTitle("Reference Manager API"));
+}
+// &end[ApiDocs]
 
 app.UseHttpsRedirection();
 
@@ -23,19 +29,22 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+    await DbSeeder.SeedAsync(db);
 }
 // &end[Database]
 
 // &begin[GetPaper]
 app.MapGet("/papers", async (AppDbContext db) =>
     await db.Papers.ToListAsync())
-    .WithName("ListPapers");
+    .WithName("ListPapers")
+    .WithOpenApi();
 
 app.MapGet("/papers/{id:int}", async (int id, AppDbContext db) =>
     await db.Papers.FindAsync(id) is Paper paper
         ? Results.Ok(paper)
         : Results.NotFound())
-    .WithName("GetPaper");
+    .WithName("GetPaper")
+    .WithOpenApi();
 // &end[GetPaper]
 
 // &begin[CreatePaper]
@@ -53,7 +62,8 @@ app.MapPost("/papers", async (PaperRequest req, AppDbContext db) =>
     await db.SaveChangesAsync();
     return Results.Created($"/papers/{paper.Id}", paper);
 })
-.WithName("CreatePaper");
+.WithName("CreatePaper")
+.WithOpenApi();
 // &end[CreatePaper]
 
 // &begin[UpdatePaper]
@@ -70,7 +80,8 @@ app.MapPut("/papers/{id:int}", async (int id, PaperRequest req, AppDbContext db)
     await db.SaveChangesAsync();
     return Results.Ok(paper);
 })
-.WithName("UpdatePaper");
+.WithName("UpdatePaper")
+.WithOpenApi();
 // &end[UpdatePaper]
 
 // &begin[DeletePaper]
@@ -83,7 +94,8 @@ app.MapDelete("/papers/{id:int}", async (int id, AppDbContext db) =>
     await db.SaveChangesAsync();
     return Results.NoContent();
 })
-.WithName("DeletePaper");
+.WithName("DeletePaper")
+.WithOpenApi();
 // &end[DeletePaper]
 
 app.Run();
