@@ -1,41 +1,91 @@
+using Microsoft.EntityFrameworkCore;
+using ReferenceManager.Data;
+using ReferenceManager.Models;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// &begin[Database]
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+// &end[Database]
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
-{
     app.MapOpenApi();
-}
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
+// &begin[Database]
+using (var scope = app.Services.CreateScope())
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+}
+// &end[Database]
 
-app.MapGet("/weatherforecast", () =>
+// &begin[GetPaper]
+app.MapGet("/papers", async (AppDbContext db) =>
+    await db.Papers.ToListAsync())
+    .WithName("ListPapers");
+
+app.MapGet("/papers/{id:int}", async (int id, AppDbContext db) =>
+    await db.Papers.FindAsync(id) is Paper paper
+        ? Results.Ok(paper)
+        : Results.NotFound())
+    .WithName("GetPaper");
+// &end[GetPaper]
+
+// &begin[CreatePaper]
+app.MapPost("/papers", async (PaperRequest req, AppDbContext db) =>
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
+    var paper = new Paper
+    {
+        Title = req.Title,
+        Authors = req.Authors,
+        Year = req.Year,
+        Abstract = req.Abstract,
+        Doi = req.Doi
+    };
+    db.Papers.Add(paper);
+    await db.SaveChangesAsync();
+    return Results.Created($"/papers/{paper.Id}", paper);
 })
-.WithName("GetWeatherForecast");
+.WithName("CreatePaper");
+// &end[CreatePaper]
+
+// &begin[UpdatePaper]
+app.MapPut("/papers/{id:int}", async (int id, PaperRequest req, AppDbContext db) =>
+{
+    var paper = await db.Papers.FindAsync(id);
+    if (paper is null) return Results.NotFound();
+
+    paper.Title = req.Title;
+    paper.Authors = req.Authors;
+    paper.Year = req.Year;
+    paper.Abstract = req.Abstract;
+    paper.Doi = req.Doi;
+    await db.SaveChangesAsync();
+    return Results.Ok(paper);
+})
+.WithName("UpdatePaper");
+// &end[UpdatePaper]
+
+// &begin[DeletePaper]
+app.MapDelete("/papers/{id:int}", async (int id, AppDbContext db) =>
+{
+    var paper = await db.Papers.FindAsync(id);
+    if (paper is null) return Results.NotFound();
+
+    db.Papers.Remove(paper);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+})
+.WithName("DeletePaper");
+// &end[DeletePaper]
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+record PaperRequest(string Title, List<string> Authors, int Year, string? Abstract, string? Doi);

@@ -1,0 +1,7 @@
+ReferenceManager
+    Database
+    Papers
+        CreatePaper
+        GetPaper
+        UpdatePaper
+        DeletePaper
