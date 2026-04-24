@@ -14,7 +14,8 @@ public static class CollectionEndpoints
         app.MapGet("/collections", async (AppDbContext db, int limit = 25, int offset = 0) =>
         {
             var total = await db.Collections.CountAsync();
-            var items = await db.Collections.Skip(offset).Take(limit).ToListAsync();
+            var items = await db.Collections.AsNoTracking().Include(c => c.Papers)
+                .Skip(offset).Take(limit).ToListAsync();
             return Results.Ok(new PagedResult<Collection>(items, total, limit, offset));
         })
         .WithName("ListCollections")

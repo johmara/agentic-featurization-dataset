@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using ReferenceManager.Data;
 using ReferenceManager.Endpoints;
@@ -6,6 +7,8 @@ using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.ConfigureHttpJsonOptions(o =>
+    o.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles);
 
 // &begin[Database]
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -38,3 +41,5 @@ v1.MapPaperEndpoints();
 v1.MapCollectionEndpoints();
 
 app.Run();
+
+public partial class Program { }
