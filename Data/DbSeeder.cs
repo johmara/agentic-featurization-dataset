@@ -130,7 +130,7 @@ public static class DbSeeder
                         new() { Name = "Jan-Philipp Steghöfer", Email = null, Affiliations = [new() { Name = "Chalmers University of Technology", City = "Gothenburg", Country = "Sweden" }] },
                     ]
                 },
-                // &begin[Collections]
+                // &begin[Groups]
                 new Paper
                 {
                     Title = "On Using LLMs to 'Featurize' Software",
@@ -197,14 +197,14 @@ public static class DbSeeder
                         new() { Name = "Thorsten Berger", Email = null, Affiliations = [new() { Name = "Ruhr-Universität Bochum", City = "Bochum", Country = "Germany" }] },
                     ]
                 }
-                // &end[Collections]
+                // &end[Groups]
             );
 
             await db.SaveChangesAsync();
         }
 
-        // &begin[Collections]
-        if (!await db.Collections.AnyAsync())
+        // &begin[Groups]
+        if (!await db.Groups.AnyAsync())
         {
             var acceptedTitles = new HashSet<string>
             {
@@ -221,7 +221,7 @@ public static class DbSeeder
                 .Where(p => acceptedTitles.Contains(p.Title))
                 .ToListAsync();
 
-            db.Collections.Add(new Collection
+            db.Groups.Add(new Group
             {
                 Name = "Accepted Papers",
                 Description = "Johan Martinson's published and accepted papers across SPLC, TSE, AISoLA, and Variability venues.",
@@ -230,6 +230,6 @@ public static class DbSeeder
 
             await db.SaveChangesAsync();
         }
-        // &end[Collections]
+        // &end[Groups]
     }
 }

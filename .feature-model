@@ -7,19 +7,13 @@ ReferenceManager
         GetPaper
         UpdatePaper
         DeletePaper
-    Collections
-        CreateCollection
-        GetCollection
-        UpdateCollection
-        DeleteCollection
-        AddPaperToCollection
-        RemovePaperFromCollection
-    Tags
-        CreateTag
-        GetTag
-        DeleteTag
-        AddTagToPaper
-        RemoveTagFromPaper
+    Groups
+        CreateGroup
+        GetGroup
+        UpdateGroup
+        DeleteGroup
+        AddPaperToGroup
+        RemovePaperFromGroup
     Favorites
         ToggleFavorite
         ListFavorites

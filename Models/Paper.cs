@@ -8,7 +8,6 @@ public class Paper
     public int Year { get; set; }
     public string? Abstract { get; set; }
     public string? Doi { get; set; }
-    public List<Collection> Collections { get; set; } = []; // &line[Collections]
-    public List<Tag> Tags { get; set; } = []; // &line[Tags]
+    public List<Group> Groups { get; set; } = []; // &line[Groups]
     public bool IsFavorited { get; set; } // &line[Favorites]
 }

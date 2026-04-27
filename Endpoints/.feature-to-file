@@ -1,8 +1,6 @@
 PaperEndpoints.cs
 Papers
-CollectionEndpoints.cs
-Collections
-TagEndpoints.cs
-Tags
+GroupEndpoints.cs
+Groups
 FavoriteEndpoints.cs
 Favorites
