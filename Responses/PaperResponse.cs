@@ -19,7 +19,6 @@ public record PaperResponse(
     string? Doi,
     string? Journal, // &line[ImportBibtex]
     string? Booktitle, // &line[ImportBibtex]
-    bool IsFavorited, // &line[Favorites]
     List<GroupSummary> Groups // &line[Groups]
 );
 
@@ -34,7 +33,6 @@ public static class PaperResponseExtensions
         p.Doi,
         p.Journal,
         p.Booktitle,
-        p.IsFavorited,
         p.Groups.Select(g => new GroupSummary(g.Id, g.Name, g.Description)).ToList()
     );
 }

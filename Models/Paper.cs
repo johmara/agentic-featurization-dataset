@@ -11,5 +11,4 @@ public class Paper
     public string? Journal { get; set; } // &line[ImportBibtex]
     public string? Booktitle { get; set; } // &line[ImportBibtex]
     public List<Group> Groups { get; set; } = []; // &line[Groups]
-    public bool IsFavorited { get; set; } // &line[Favorites]
 }

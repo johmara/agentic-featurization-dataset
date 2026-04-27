@@ -64,9 +64,6 @@ namespace ReferenceManager.Migrations
                     b.Property<string>("Doi")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsFavorited")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("TEXT");

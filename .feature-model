@@ -24,6 +24,3 @@ ReferenceManager
         DeleteGroup
         AddPaperToGroup
         RemovePaperFromGroup
-    Favorites
-        ToggleFavorite
-        ListFavorites

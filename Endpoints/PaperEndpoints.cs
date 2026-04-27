@@ -238,15 +238,12 @@ public static class PaperEndpoints
         // &end[SearchPapers]
 
         // &begin[ExportBibtex]
-        app.MapGet("/papers/export/bibtex", async (AppDbContext db, int? groupId, bool? favorited) =>
+        app.MapGet("/papers/export/bibtex", async (AppDbContext db, int? groupId) =>
         {
             var query = db.Papers.Include(p => p.Authors).AsQueryable();
 
             if (groupId.HasValue)
                 query = query.Where(p => p.Groups.Any(g => g.Id == groupId.Value));
-
-            if (favorited == true)
-                query = query.Where(p => p.IsFavorited);
 
             var papers = await query.ToListAsync();
             var bib = BibtexSerializer.Serialize(papers);
