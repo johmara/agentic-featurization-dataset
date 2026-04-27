@@ -71,7 +71,7 @@ public class PaperEndpointTests(CustomWebApplicationFactory factory)
         var req = new PaperRequest(
             "Test Paper",
             [new AuthorRequest("Test Author", null, [])],
-            2024, null, null);
+            2024, null, null, null, null);
 
         var response = await _client.PostAsJsonAsync("/api/v1/papers", req);
 
@@ -88,7 +88,7 @@ public class PaperEndpointTests(CustomWebApplicationFactory factory)
         var req = new PaperRequest(
             "Updated Title",
             [new AuthorRequest("Author", null, [])],
-            2025, "Updated abstract", null);
+            2025, "Updated abstract", null, null, null);
 
         var response = await _client.PutAsJsonAsync("/api/v1/papers/1", req);
 
@@ -101,7 +101,7 @@ public class PaperEndpointTests(CustomWebApplicationFactory factory)
     [Fact]
     public async Task UpdatePaper_NonExistentId_ReturnsNotFound()
     {
-        var req = new PaperRequest("Title", [], 2024, null, null);
+        var req = new PaperRequest("Title", [], 2024, null, null, null, null);
 
         var response = await _client.PutAsJsonAsync("/api/v1/papers/99999", req);
 

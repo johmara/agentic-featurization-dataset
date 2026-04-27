@@ -38,7 +38,9 @@ public static class PaperEndpoints
                 Authors = req.Authors.Select(ToAuthor).ToList(),
                 Year = req.Year,
                 Abstract = req.Abstract,
-                Doi = req.Doi
+                Doi = req.Doi,
+                Journal = req.Journal,
+                Booktitle = req.Booktitle,
             };
             db.Papers.Add(paper);
             await db.SaveChangesAsync();
@@ -59,6 +61,8 @@ public static class PaperEndpoints
             paper.Year = req.Year;
             paper.Abstract = req.Abstract;
             paper.Doi = req.Doi;
+            paper.Journal = req.Journal;
+            paper.Booktitle = req.Booktitle;
             await db.SaveChangesAsync();
             return Results.Ok(paper);
         })
@@ -158,6 +162,27 @@ public static class PaperEndpoints
         .WithName("ImportBibtex")
         .WithOpenApi();
         // &end[ImportBibtex]
+
+        // &begin[ExportBibtex]
+        app.MapGet("/papers/export/bibtex", async (AppDbContext db, int? groupId, bool? favorited) =>
+        {
+            var query = db.Papers.Include(p => p.Authors).AsQueryable();
+
+            if (groupId.HasValue)
+                query = query.Where(p => p.Groups.Any(g => g.Id == groupId.Value));
+
+            if (favorited == true)
+                query = query.Where(p => p.IsFavorited);
+
+            var papers = await query.ToListAsync();
+            var bib = BibtexSerializer.Serialize(papers);
+
+            return Results.Text(bib, "text/plain; charset=utf-8");
+        })
+        .WithName("ExportBibtex")
+        .Produces<string>(200, "text/plain")
+        .WithOpenApi();
+        // &end[ExportBibtex]
     }
 
     private static string TitleAuthorKey(string title, IEnumerable<string> authorNames) =>

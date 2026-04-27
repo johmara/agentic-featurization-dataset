@@ -8,6 +8,7 @@ ReferenceManager
         UpdatePaper
         DeletePaper
         ImportBibtex
+        ExportBibtex
     Groups
         CreateGroup
         GetGroup
