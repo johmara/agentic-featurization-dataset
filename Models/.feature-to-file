@@ -6,3 +6,5 @@ Affiliation.cs
 Papers
 Collection.cs
 Collections
+Tag.cs
+Tags

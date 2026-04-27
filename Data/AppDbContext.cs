@@ -7,6 +7,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<Paper> Papers => Set<Paper>();
     public DbSet<Collection> Collections => Set<Collection>(); // &line[Collections]
+    public DbSet<Tag> Tags => Set<Tag>(); // &line[Tags]
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,5 +23,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany(p => p.Collections)
             .UsingEntity("PaperCollection");
         // &end[Collections]
+
+        // &begin[Tags]
+        modelBuilder.Entity<Tag>()
+            .HasMany(t => t.Papers)
+            .WithMany(p => p.Tags)
+            .UsingEntity("PaperTag");
+        // &end[Tags]
     }
 }

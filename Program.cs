@@ -39,6 +39,7 @@ using (var scope = app.Services.CreateScope())
 var v1 = app.MapGroup("/api/v1"); // &line[Versioning]
 v1.MapPaperEndpoints();
 v1.MapCollectionEndpoints();
+v1.MapTagEndpoints(); // &line[Tags]
 
 app.Run();
 

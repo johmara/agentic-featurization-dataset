@@ -9,4 +9,5 @@ public class Paper
     public string? Abstract { get; set; }
     public string? Doi { get; set; }
     public List<Collection> Collections { get; set; } = []; // &line[Collections]
+    public List<Tag> Tags { get; set; } = []; // &line[Tags]
 }

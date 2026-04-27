@@ -14,3 +14,9 @@ ReferenceManager
         DeleteCollection
         AddPaperToCollection
         RemovePaperFromCollection
+    Tags
+        CreateTag
+        GetTag
+        DeleteTag
+        AddTagToPaper
+        RemoveTagFromPaper
