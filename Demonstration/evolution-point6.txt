@@ -1,0 +1,740 @@
+╭─── Claude Code v2.1.119 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back Developer!                │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ Recent activity         │
+│                        ▘▘ ▝▝                       │ No recent activity      │
+│                                                    │                         │
+│           Sonnet 4.6 · Claude Enterprise           │                         │
+│ /…/greta-demo/ReferenceManager │                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+  [The Company] AI Governance: Never paste operational secrets (credentials, API keys, connection strings, tokens) into any Claude surface.
+
+❯ /clear                                                                        
+  ⎿  (no content)
+
+❯ Add a BibTeX import feature — add an endpoint that accepts a .bib file        
+  upload, parses it, and creates Paper records from the BibTeX entries. Handle  
+  the common fields: title, author, year, abstract, doi, journal, booktitle.    
+  Skip entries that already exist based on DOI.                                 
+
+● Using the feature model workflow.
+
+  Starting with git status check, then reading feature model and current code.
+
+● Bash(git -C
+      .
+      status)
+  ⎿  On branch main
+     Changes not staged for commit:
+       (use "git add/rm <file>..." to update what will be committed)
+     … +21 lines (ctrl+o to expand)
+
+● Uncommitted changes present. Commit before proceeding?
+
+❯ yes                                                                           
+
+● Bash(git -C
+      . diff
+      --stat && git -C
+      src/greta-demo/ReferenceM…)
+  ⎿   .feature-model                                    |  20 ++-
+      Data/AppDbContext.cs                              |  22 ++--
+      Data/DbSeeder.cs                                  |  12 +-
+     … +19 lines (ctrl+o to expand)
+
+● Bash(git add -A && git commit -m "$(cat <<'EOF'
+      feat: merge Tags and Collections into unified Groups model…)
+  ⎿  [main 4604f7c] feat: merge Tags and Collections into unified Groups mo
+     del
+      22 files changed, 655 insertions(+), 468 deletions(-)
+     … +14 lines (ctrl+o to expand)
+
+● Committed. Now reading feature model and exploring codebase.
+
+  Listed 1 directory, called fm-gui (ctrl+o to expand)
+
+● Skill(feature-model)
+  ⎿  Successfully loaded skill
+
+● Skill(embedded-feature-annotation)
+  ⎿  Successfully loaded skill
+
+● Both skills loaded. Reading existing code to understand patterns.
+
+  Read 5 files, listed 1 directory (ctrl+o to expand)
+
+● Bash(cat ./
+      Models/Author.cs 2>/dev/null || find
+      src/2026-ase-agentic-featurizatio…)
+  ⎿  namespace ReferenceManager.Models;
+
+     public class Author
+     … +5 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● Good picture. Now checking Responses folder and tests patterns.
+
+  Read 2 files, listed 2 directories (ctrl+o to expand)
+
+● Now implementing. Plan: add ImportBibtex to feature model, add
+  Journal/Booktitle to Paper, write parser, add endpoint, write tests, run
+  migration.
+  Read 1 file (ctrl+o to expand)
+
+● Update(.feature-model)
+  ⎿  Added 1 line
+       7          GetPaper
+       8          UpdatePaper
+       9          DeletePaper
+      10 +        ImportBibtex                                           
+      11      Groups
+      12          CreateGroup
+      13          GetGroup
+
+● Update(Models/Paper.cs)
+  ⎿  Added 2 lines
+       8      public int Year { get; set; }
+       9      public string? Abstract { get; set; }
+      10      public string? Doi { get; set; }
+      11 +    public string? Journal { get; set; } // &line[ImportBibtex]
+      12 +    public string? Booktitle { get; set; } // &line[ImportBibte
+         +x]                                                             
+      13      public List<Group> Groups { get; set; } = []; // &line[Grou
+          ps]
+      14      public bool IsFavorited { get; set; } // &line[Favorites]
+      15  }
+
+● Now create parser, response, and feature-to-file files:
+
+● Bash(mkdir -p src/greta-demo/ReferenceMan
+      ager/Services)
+  ⎿  Done
+
+● Write(Services/BibtexParser.cs)
+  ⎿  Wrote 95 lines to Services/BibtexParser.cs
+       2 using System.Text;
+       3 namespace ReferenceManager.Services;
+       4 
+       5 public record BibtexEntry(string Type, string Key, Dictionary<st
+         ring, string> Fields);
+       6 
+       7 public static class BibtexParser
+       8 {
+       9     public static List<BibtexEntry> Parse(string content)
+      10     {
+     … +99 lines (ctrl+o to expand)
+
+● Write(Services/.feature-to-file)
+  ⎿  Wrote 2 lines to Services/.feature-to-file
+      1 BibtexParser.cs
+      2 ImportBibtex
+
+● Write(Responses/ImportResult.cs)
+  ⎿  Wrote 3 lines to Responses/ImportResult.cs
+      1 namespace ReferenceManager.Responses;
+      2 
+      3 record ImportResult(int Created, int Skipped);
+
+● Write(Responses/.feature-to-file)
+  ⎿  Wrote 2 lines to Responses/.feature-to-file
+      1 ImportResult.cs
+      2 ImportBibtex
+
+● Now add the import endpoint to PaperEndpoints.cs:
+
+● Update(Endpoints/PaperEndpoints.cs)
+  ⎿  Added 1 line
+      3  using ReferenceManager.Models;
+      4  using ReferenceManager.Requests;
+      5  using ReferenceManager.Responses;
+      6 +using ReferenceManager.Services;                                
+      7  
+      8  namespace ReferenceManager.Endpoints;
+      9  
+
+● Update(Endpoints/PaperEndpoints.cs)
+  ⎿  Added 54 lines
+       79          .WithName("DeletePaper")
+       80          .WithOpenApi();
+       81          // &end[DeletePaper]
+       82 +                                                              
+       83 +        // &begin[ImportBibtex]                               
+       84 +        app.MapPost("/papers/import/bibtex", async (IFormFile 
+          +file, AppDbContext db) =>                                     
+       85 +        {                                                     
+       86 +            using var reader = new StreamReader(file.OpenReadS
+          +tream());                                                     
+       87 +            var content = await reader.ReadToEndAsync();      
+       88 +            var entries = BibtexParser.Parse(content);        
+       89 +                                                              
+       90 +            int created = 0, skipped = 0;                     
+       91 +            foreach (var entry in entries)                    
+       92 +            {                                                 
+       93 +                if (!entry.Fields.TryGetValue("title", out var
+          + title) || string.IsNullOrWhiteSpace(title))                  
+       94 +                    continue;                                 
+       95 +                                                              
+       96 +                entry.Fields.TryGetValue("doi", out var doi); 
+       97 +                var normalizedDoi = string.IsNullOrWhiteSpace(
+          +doi) ? null : doi.Trim();                                     
+       98 +                                                              
+       99 +                if (normalizedDoi is not null && await db.Pape
+          +rs.AnyAsync(p => p.Doi == normalizedDoi))                     
+      100 +                {                                             
+      101 +                    skipped++;                                
+      102 +                    continue;                                 
+      103 +                }                                             
+      104 +                                                              
+      105 +                entry.Fields.TryGetValue("author", out var aut
+          +horStr);                                                      
+      106 +                var authors = (authorStr ?? string.Empty)     
+      107 +                    .Split(" and ", StringSplitOptions.RemoveE
+          +mptyEntries | StringSplitOptions.TrimEntries)                 
+      108 +                    .Select(name => new Author { Name = name }
+          +)                                                             
+      109 +                    .ToList();                                
+      110 +                                                              
+      111 +                int.TryParse(entry.Fields.GetValueOrDefault("y
+          +ear"), out var year);                                         
+      112 +                entry.Fields.TryGetValue("abstract", out var a
+          +bstractStr);                                                  
+      113 +                entry.Fields.TryGetValue("journal", out var jo
+          +urnal);                                                       
+      114 +                entry.Fields.TryGetValue("booktitle", out var 
+          +booktitle);                                                   
+      115 +                                                              
+      116 +                db.Papers.Add(new Paper                       
+      117 +                {                                             
+      118 +                    Title = title,                            
+      119 +                    Authors = authors,                        
+      120 +                    Year = year,                              
+      121 +                    Abstract = string.IsNullOrWhiteSpace(abstr
+          +actStr) ? null : abstractStr,                                 
+      122 +                    Doi = normalizedDoi,                      
+      123 +                    Journal = string.IsNullOrWhiteSpace(journa
+          +l) ? null : journal,                                          
+      124 +                    Booktitle = string.IsNullOrWhiteSpace(book
+          +title) ? null : booktitle,                                    
+      125 +                });                                           
+      126 +                created++;                                    
+      127 +            }                                                 
+      128 +                                                              
+      129 +            await db.SaveChangesAsync();                      
+      130 +            return Results.Ok(new ImportResult(created, skippe
+          +d));                                                          
+      131 +        })                                                    
+      132 +        .DisableAntiforgery()                                 
+      133 +        .WithName("ImportBibtex")                             
+      134 +        .WithOpenApi();                                       
+      135 +        // &end[ImportBibtex]                                 
+      136      }
+      137  
+      138      private static Author ToAuthor(AuthorRequest r) => new()
+
+● Now add the test file and run the migration:
+
+● Write(ReferenceManager.Tests/BibtexImportTests.cs)
+  ⎿  Wrote 134 lines to ReferenceManager.Tests/BibtexImportTests.cs
+       2 using System.Net.Http.Json;
+       3 using ReferenceManager.Responses;
+       4 using ReferenceManager.Models;
+       5 using Xunit;
+       6 
+       7 namespace ReferenceManager.Tests;
+       8 
+       9 public class BibtexImportTests(CustomWebApplicationFactory facto
+         ry)
+      10     : IClassFixture<CustomWebApplicationFactory>
+     … +137 lines (ctrl+o to expand)
+
+● Now run migration:
+
+● Bash(dotnet ef migrations add AddJournalAndBooktitleToPaper 2>&1)
+  ⎿  Running in the background (↓ to manage)
+  ⎿  (timeout 1m)
+
+  Read 1 file (ctrl+o to expand)
+
+● Bash(dotnet ef migrations add AddJournalAndBooktitleToPaper 2>&1)
+  ⎿  Error: Exit code 1
+     Build started...
+     Build succeeded.
+     The name 'AddJournalAndBooktitleToPaper' is used by an existing migration.
+
+● Background command "Add EF migration for new Paper fields" completed (exit code 0)
+
+● Migration created by background task. Now run tests:
+
+● Bash(dotnet test 2>&1)
+  ⎿  Error: Exit code 1
+       Determining projects to restore...
+       All projects are up-to-date for restore.
+       ReferenceManager -> src/greta-demo/R
+     eferenceManager/bin/Debug/net9.0/ReferenceManager.dll
+     ./Refere
+     nceManager.Tests/BibtexImportTests.cs(45,21): error CS9006: The 
+     interpolated raw string literal does not start with enough '$' characters 
+     to allow this many consecutive opening braces as content. 
+     [./Refer
+     enceManager.Tests/ReferenceManager.Tests.csproj]
+     ./Refere
+     nceManager.Tests/BibtexImportTests.cs(46,15): error CS1073: Unexpected 
+     token '{' [src/greta-demo/ReferenceMan
+     ager/ReferenceManager.Tests/ReferenceManager.Tests.csproj]
+     ./Refere
+     nceManager.Tests/BibtexImportTests.cs(46,23): error CS1525: Invalid 
+     expression term '{' [src/greta-demo/Re
+     ferenceManager/ReferenceManager.Tests/ReferenceManager.Tests.csproj]
+     ./Refere
+     nceManager.Tests/BibtexImportTests.cs(52,15): error CS1073: Unexpected 
+     token '{' [src/greta-demo/ReferenceMan
+     ager/ReferenceManager.Tests/ReferenceManager.Tests.csproj]
+     ./Refere
+     nceManager.Tests/BibtexImportTests.cs(52,23): error CS1525: Invalid 
+     expression term '{' [src/greta-demo/Re
+     ferenceManager/ReferenceManager.Tests/ReferenceManager.Tests.csproj]
+     ./Refere
+     nceManager.Tests/BibtexImportTests.cs(100,21): error CS9006: The 
+     interpolated raw string literal does not start with enough '$' characters 
+     to allow this many consecutive opening braces as content. 
+     [./Refer
+     enceManager.Tests/ReferenceManager.Tests.csproj]
+     … +2 lines (ctrl+o to expand)
+
+● Raw string literal issue — $"""...""" needs $$"""...""" when BibTeX braces
+  collide with interpolation holes. Fixing tests:
+
+● Update(ReferenceManager.Tests/BibtexImportTests.cs)
+  ⎿  Added 11 lines, removed 11 lines
+      41      public async Task ImportBibtex_DuplicateDoi_SkipsSecondEntr
+          y()
+      42      {
+      43          var doi = $"10.9999/dup-test-{Guid.NewGuid()}";
+      44 -        var bib = $"""                                         
+      45 -            @article{{first,                                   
+      46 -              title = {{First Paper}},                         
+      47 -              author = {{Author One}},                         
+      48 -              year = {{2024}},                                 
+      44 +        var bib = $$"""                                        
+      45 +            @article{first,                                    
+      46 +              title = {First Paper},                           
+      47 +              author = {Author One},                           
+      48 +              year = {2024},                                   
+      49                doi = {{{doi}}}
+      50 -            }}                                                 
+      51 -            @article{{second,                                  
+      52 -              title = {{Second Paper with Same DOI}},          
+      53 -              author = {{Author Two}},                         
+      54 -              year = {{2024}},                                 
+      50 +            }                                                  
+      51 +            @article{second,                                   
+      52 +              title = {Second Paper with Same DOI},            
+      53 +              author = {Author Two},                           
+      54 +              year = {2024},                                   
+      55                doi = {{{doi}}}
+      56 -            }}                                                 
+      56 +            }                                                  
+      57              """;
+      58  
+      59          var response = await _client.PostAsync("/api/v1/papers/
+          import/bibtex", BibContent(bib));
+
+● Update(ReferenceManager.Tests/BibtexImportTests.cs)  ⎿  Added 6 lines, removed 6 lines
+       96      public async Task ImportBibtex_AuthorField_SplitsOnAnd()
+       97      {
+       98          var doi = $"10.9999/author-split-{Guid.NewGuid()}";
+       99 -        var bib = $"""                                        
+      100 -            @article{{multi,                                  
+      101 -              title = {{Multi-Author Paper}},                 
+      102 -              author = {{Smith, John and Doe, Jane and Brown, 
+          -Bob}},                                                        
+      103 -              year = {{2024}},                                
+       99 +        var bib = $$"""                                       
+      100 +            @article{multi,                                   
+      101 +              title = {Multi-Author Paper},                   
+      102 +              author = {Smith, John and Doe, Jane and Brown, B
+          +ob},                                                          
+      103 +              year = {2024},                                  
+      104                doi = {{{doi}}}
+      105 -            }}                                                
+      105 +            }                                                 
+      106              """;
+      107  
+      108          await _client.PostAsync("/api/v1/papers/import/bibtex"
+           , BibContent(bib));
+
+● Bash(dotnet test 2>&1)
+  ⎿  Running in the background (↓ to manage)
+  ⎿  (timeout 2m)
+
+  Read 1 file (ctrl+o to expand)
+
+● Bash(sleep 5 && cat
+      /tmp/claude-1000/-mnt-c-source-papers-greta-demo-Refer
+      enceManager/19f58e66-4068-48dc-958d-b7522ad95620/tasks/bem1jv8as.output)
+  ⎿    Determining projects to restore...
+       All projects are up-to-date for restore.
+  ⎿  (timeout 2m)
+
+● Bash(dotnet test --no-restore 2>&1)
+  ⎿  Running in the background (↓ to manage)
+  ⎿  (timeout 2m)
+
+  Read 1 file (ctrl+o to expand)
+
+● Bash(dotnet build 2>&1 && echo "BUILD_OK")
+  ⎿  Running in the background (↓ to manage)
+  ⎿  (timeout 1m)
+
+● Bash(sleep 20 && cat
+      /tmp/claude-1000/-mnt-c-source-papers-greta-demo-Refer
+      enceManager/19f58e66-4068-48dc-958d-b7522ad95620/tasks/bs5hww5sg.outpu…)
+  ⎿  (No output)
+  ⎿  (timeout 1m)
+
+● Bash(dotnet build ReferenceManager.csproj 2>&1; echo "EXIT:$?")
+  ⎿    Determining projects to restore...
+       All projects are up-to-date for restore.
+       ReferenceManager -> src/2026-ase-agentic-featurizat
+     … +8 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+● Background command "Run tests" failed with exit code 1
+
+● Background command "Build to check for compile errors" completed (exit code 0)
+
+● Background command "Run tests without restore, foreground" failed with exit code 1
+
+  Read 1 file (ctrl+o to expand)
+
+● Test reveals: duplicate DOI check doesn't catch duplicates within same batch
+  (DB not yet flushed). Fix: track seen DOIs in a HashSet per import.
+
+● Update(Endpoints/PaperEndpoints.cs)
+  ⎿  Added 5 lines, removed 1 line
+      88              var entries = BibtexParser.Parse(content);
+      89  
+      90              int created = 0, skipped = 0;
+      91 +            var seenDois = new HashSet<string>(StringComparer.O
+         +rdinalIgnoreCase);                                             
+      92              foreach (var entry in entries)
+      93              {
+      94                  if (!entry.Fields.TryGetValue("title", out var 
+          title) || string.IsNullOrWhiteSpace(title))
+     ...
+       97                  entry.Fields.TryGetValue("doi", out var doi);
+       98                  var normalizedDoi = string.IsNullOrWhiteSpace(
+           doi) ? null : doi.Trim();
+       99  
+       99 -                if (normalizedDoi is not null && await db.Pape
+          -rs.AnyAsync(p => p.Doi == normalizedDoi))                     
+      100 +                if (normalizedDoi is not null &&              
+      101 +                    (seenDois.Contains(normalizedDoi) || await
+          + db.Papers.AnyAsync(p => p.Doi == normalizedDoi)))            
+      102                  {
+      103                      skipped++;
+      104                      continue;
+      105                  }
+      106  
+      107 +                if (normalizedDoi is not null) seenDois.Add(no
+          +rmalizedDoi);                                                 
+      108 +                                                              
+      109                  entry.Fields.TryGetValue("author", out var aut
+           horStr);
+      110                  var authors = (authorStr ?? string.Empty)
+      111                      .Split(" and ", StringSplitOptions.RemoveE
+           mptyEntries | StringSplitOptions.TrimEntries)
+
+● Bash(dotnet test 2>&1)
+  ⎿  Error: Exit code 1
+       Determining projects to restore...
+       All projects are up-to-date for restore.
+       ReferenceManager -> src/greta-demo/R
+     eferenceManager/bin/Debug/net9.0/ReferenceManager.dll
+     /usr/lib/dotnet/sdk/9.0.111/Microsoft.Common.CurrentVersion.targets(5322,5)
+     : error MSB3030: Could not copy the file "src/2026-ase-age
+     ntic-featurization/ReferenceManager/ReferenceManager.Tests/bin/Debug/net9.0
+     /ReferenceManager.Tests/bin/Debug/net9.0/MvcTestingAppManifest.json" 
+     because it was not found. [src/2026-ase-agentic-featurizat
+     ion/ReferenceManager/ReferenceManager.Tests/ReferenceManager.Tests.csproj]
+     /usr/lib/dotnet/sdk/9.0.111/Microsoft.Common.CurrentVersion.targets(5322,5)
+     : warning MSB3026: Could not copy "src/2026-ase-agentic-fe
+     aturization/ReferenceManager/ReferenceManager.Tests/bin/Debug/net9.0/Refere
+     nceManager.Tests/obj/Debug/net9.0/MvcTestingAppManifest.json" to 
+     "bin/Debug/net9.0/ReferenceManager.Tests/bin/Debug/net9.0/ReferenceManager.
+     Tests/obj/Debug/net9.0/MvcTestingAppManifest.json". Beginning retry 1 in 
+     1000ms. Could not find file 'src/2026-ase-agentic-featuriz
+     ation/ReferenceManager/ReferenceManager.Tests/bin/Debug/net9.0/ReferenceMan
+     ager.Tests/obj/Debug/net9.0/MvcTestingAppManifest.json'.  
+     [./Refer
+     enceManager.Tests/ReferenceManager.Tests.csproj]
+
+● Bash(dotnet clean 2>&1 && dotnet test 2>&1)
+  ⎿  Build started 04/27/2026 11:14:32.
+          1>Project "src/greta-demo/Re
+     ferenceManager/ReferenceManager.sln" on node 1 (Clean target(s)).
+     … +426 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+  Read 1 file (ctrl+o to expand)
+
+● 28/28 pass. Now display summary via MCP.
+
+  Called fm-gui (ctrl+o to expand)
+
+● Done. Summary:
+
+  New files:
+  - Services/BibtexParser.cs — hand-written parser, handles nested braces, {},
+  "", bare values
+  - Services/.feature-to-file → ImportBibtex
+  - Responses/ImportResult.cs — record ImportResult(int Created, int Skipped)
+  - Responses/.feature-to-file → ImportBibtex
+  - ReferenceManager.Tests/BibtexImportTests.cs — 5 tests
+
+  Modified:
+  - .feature-model — ImportBibtex added under Papers
+  - Models/Paper.cs — Journal?, Booktitle? fields with &line[ImportBibtex]
+  - Endpoints/PaperEndpoints.cs — POST /papers/import/bibtex block with
+  &begin/end[ImportBibtex]
+  - Migration generated for new Paper fields
+
+  Key behavior: duplicate DOIs tracked per-batch via HashSet + DB query, so
+  same-file duplicates are also caught. 28/28 tests pass.
+
+✻ Sautéed for 1h 1m 54s
+
+❯ /export                                                                       
+  ⎿  Conversation copied to clipboard
+
+❯ if doi is null then we should look at title + authors to check for            
+  duplicates.                                                                   
+● Starting workflow checks.
+
+● Bash(git -C
+      .
+      status)
+  ⎿  On branch main
+     Changes not staged for commit:
+       (use "git add <file>..." to update what will be committed)
+     … +17 lines (ctrl+o to expand)
+
+  Called fm-gui (ctrl+o to expand)
+
+● Uncommitted changes present (from previous work). Commit before proceeding?
+
+❯ no                                                                            
+
+● Skill(feature-model)
+  ⎿  Successfully loaded skill
+
+● Skill(embedded-feature-annotation)
+  ⎿  Successfully loaded skill
+
+● No feature model changes needed. Reading current endpoint to make precise
+  edits.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(Endpoints/PaperEndpoints.cs)
+  ⎿  Added 23 lines, removed 2 lines
+      89  
+      90              int created = 0, skipped = 0;
+      91              var seenDois = new HashSet<string>(StringComparer.O
+          rdinalIgnoreCase);
+      92 +            var seenTitleAuthor = new HashSet<string>(StringCom
+         +parer.OrdinalIgnoreCase);                                      
+      93              foreach (var entry in entries)
+      94              {
+      95                  if (!entry.Fields.TryGetValue("title", out var 
+          title) || string.IsNullOrWhiteSpace(title))
+     ...
+      108                  if (normalizedDoi is not null) seenDois.Add(no
+           rmalizedDoi);
+      109  
+      110                  entry.Fields.TryGetValue("author", out var aut
+           horStr);
+      110 -                var authors = (authorStr ?? string.Empty)     
+      111 +                var authorNames = (authorStr ?? string.Empty) 
+      112                      .Split(" and ", StringSplitOptions.RemoveE
+           mptyEntries | StringSplitOptions.TrimEntries)
+      112 -                    .Select(name => new Author { Name = name }
+          -)                                                             
+      113                      .ToList();
+      114 +                var authors = authorNames.Select(name => new A
+          +uthor { Name = name }).ToList();                              
+      115  
+      116 +                if (normalizedDoi is null)                    
+      117 +                {                                             
+      118 +                    var titleAuthorKey = TitleAuthorKey(title,
+          + authorNames);                                                
+      119 +                    if (seenTitleAuthor.Contains(titleAuthorKe
+          +y))                                                           
+      120 +                    {                                         
+      121 +                        skipped++;                            
+      122 +                        continue;                             
+      123 +                    }                                         
+      124 +                    var normalizedTitle = title.Trim().ToLower
+          +Invariant();                                                  
+      125 +                    var candidates = await db.Papers          
+      126 +                        .Where(p => p.Doi == null && p.Title.T
+          +oLower() == normalizedTitle)                                  
+      127 +                        .ToListAsync();                       
+      128 +                    if (candidates.Any(p => TitleAuthorKey(p.T
+          +itle, p.Authors.Select(a => a.Name)) == titleAuthorKey))      
+      129 +                    {                                         
+      130 +                        skipped++;                            
+      131 +                        continue;                             
+      132 +                    }                                         
+      133 +                    seenTitleAuthor.Add(titleAuthorKey);      
+      134 +                }                                             
+      135 +                                                              
+      136                  int.TryParse(entry.Fields.GetValueOrDefault("y
+           ear"), out var year);
+      137                  entry.Fields.TryGetValue("abstract", out var a
+           bstractStr);
+      138                  entry.Fields.TryGetValue("journal", out var jo
+           urnal);
+
+● Now add the TitleAuthorKey helper alongside ToAuthor:
+
+● Update(Endpoints/PaperEndpoints.cs)
+  ⎿  Added 4 lines
+      160          // &end[ImportBibtex]
+      161      }
+      162  
+      163 +    private static string TitleAuthorKey(string title, IEnumer
+          +able<string> authorNames) =>                                  
+      164 +        title.Trim().ToLowerInvariant() + "||" +              
+      165 +        string.Join("|", authorNames.Select(n => n.Trim().ToLo
+          +werInvariant()).Order());                                     
+      166 +                                                              
+      167      private static Author ToAuthor(AuthorRequest r) => new()
+      168      {
+      169          Name = r.Name,
+
+● Also fix the authors variable reference (renamed from authors list to
+  authorNames + authors):
+
+  Read 1 file (ctrl+o to expand)
+
+● Code looks good. Now add tests for the new behavior:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(ReferenceManager.Tests/BibtexImportTests.cs)
+  ⎿  Added 77 lines
+      131          Assert.Equal(0, result.Created);
+      132          Assert.Equal(0, result.Skipped);
+      133      }
+      134 +                                                              
+      135 +    [Fact]                                                    
+      136 +    public async Task ImportBibtex_NoDoi_SameTitleAndAuthors_S
+          +kipsSecondEntry()                                             
+      137 +    {                                                         
+      138 +        var title = $"Duplicate Title No DOI {Guid.NewGuid()}"
+          +;                                                             
+      139 +        var bib = $$"""                                       
+      140 +            @inproceedings{dup1,                              
+      141 +              title = {{{title}}},                            
+      142 +              author = {Alice and Bob},                       
+      143 +              year = {2023}                                   
+      144 +            }                                                 
+      145 +            @inproceedings{dup2,                              
+      146 +              title = {{{title}}},                            
+      147 +              author = {Alice and Bob},                       
+      148 +              year = {2023}                                   
+      149 +            }                                                 
+      150 +            """;                                              
+      151 +                                                              
+      152 +        var response = await _client.PostAsync("/api/v1/papers
+          +/import/bibtex", BibContent(bib));                            
+      153 +                                                              
+      154 +        Assert.Equal(HttpStatusCode.OK, response.StatusCode); 
+      155 +        var result = await response.Content.ReadFromJsonAsync<
+          +ImportResult>();                                              
+      156 +        Assert.NotNull(result);                               
+      157 +        Assert.Equal(1, result.Created);                      
+      158 +        Assert.Equal(1, result.Skipped);                      
+      159 +    }                                                         
+      160 +                                                              
+      161 +    [Fact]                                                    
+      162 +    public async Task ImportBibtex_NoDoi_SameTitleDifferentAut
+          +hors_CreatesBoth()                                            
+      163 +    {                                                         
+      164 +        var title = $"Same Title Different Authors {Guid.NewGu
+          +id()}";                                                       
+      165 +        var bib = $$"""                                       
+      166 +            @inproceedings{v1,                                
+      167 +              title = {{{title}}},                            
+      168 +              author = {Alice},                               
+      169 +              year = {2023}                                   
+      170 +            }                                                 
+      171 +            @inproceedings{v2,                                
+      172 +              title = {{{title}}},                            
+      173 +              author = {Bob},                                 
+      174 +              year = {2024}                                   
+      175 +            }                                                 
+      176 +            """;                                              
+      177 +                                                              
+      178 +        var response = await _client.PostAsync("/api/v1/papers
+          +/import/bibtex", BibContent(bib));                            
+      179 +                                                              
+      180 +        Assert.Equal(HttpStatusCode.OK, response.StatusCode); 
+      181 +        var result = await response.Content.ReadFromJsonAsync<
+          +ImportResult>();                                              
+      182 +        Assert.NotNull(result);                               
+      183 +        Assert.Equal(2, result.Created);                      
+      184 +        Assert.Equal(0, result.Skipped);                      
+      185 +    }                                                         
+      186 +                                                              
+      187 +    [Fact]                                                    
+      188 +    public async Task ImportBibtex_NoDoi_AlreadyInDb_SkipsEntr
+          +y()                                                           
+      189 +    {                                                         
+      190 +        var title = $"Existing Paper No DOI {Guid.NewGuid()}";
+      191 +        var bib = $$"""                                       
+      192 +            @inproceedings{existing,                          
+      193 +              title = {{{title}}},                            
+      194 +              author = {Carol},                               
+      195 +              year = {2022}                                   
+      196 +            }                                                 
+      197 +            """;                                              
+      198 +                                                              
+      199 +        // First import — creates it                          
+      200 +        await _client.PostAsync("/api/v1/papers/import/bibtex"
+          +, BibContent(bib));                                           
+      201 +                                                              
+      202 +        // Second import — should skip                        
+      203 +        var response = await _client.PostAsync("/api/v1/papers
+          +/import/bibtex", BibContent(bib));                            
+      204 +                                                              
+      205 +        Assert.Equal(HttpStatusCode.OK, response.StatusCode); 
+      206 +        var result = await response.Content.ReadFromJsonAsync<
+          +ImportResult>();                                              
+      207 +        Assert.NotNull(result);                               
+      208 +        Assert.Equal(0, result.Created);                      
+      209 +        Assert.Equal(1, result.Skipped);                      
+      210 +    }                                                         
+      211  }
+
+● Bash(dotnet test 2>&1)
+  ⎿    Determining projects to restore...
+       All projects are up-to-date for restore.
+       ReferenceManager -> src/2026-ase-agentic-featurizat
+     … +19 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+● 31/31 pass. Displaying summary.
+
+  Called fm-gui (ctrl+o to expand)
+
+● Done. Logic: no DOI → build "title||author1|author2|..." key (sorted,
+  lowercased) → check seenTitleAuthor set first, then query DB for papers with
+  same title + no DOI, compare keys in memory. 31/31 pass.
+
+✻ Brewed for 1m 35s

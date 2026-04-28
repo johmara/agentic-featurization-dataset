@@ -1,0 +1,2050 @@
+╭─── Claude Code v2.1.119 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back Developer!                │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ Recent activity         │
+│                        ▘▘ ▝▝                       │ No recent activity      │
+│                                                    │                         │
+│           Sonnet 4.6 · Claude Enterprise           │                         │
+│ /…/greta-demo/ReferenceManager │                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+  New to Claude Code? Start with /help, review the CLAUDE.md in your repository, and install relevant plugins for your role from the [The Company] marketplace via /plugin.
+
+❯ Add a Collections feature — a collection is a named group of papers with an   
+  optional description. Papers can belong to multiple collections and a         
+  collection can have many papers. Add full CRUD for collections and endpoints  
+  to add or remove papers from a collection.                                    
+
+● Using the feature model workflow.
+
+  Checking git status and reading feature model.
+
+● Bash(git status)
+  ⎿  On branch main
+     Untracked files:
+       (use "git add <file>..." to include in what will be committed)
+     … +7 lines (ctrl+o to expand)
+
+● Untracked files only, no uncommitted changes to worry about. Reading feature
+  model and loading skills now.
+
+  Called fm-gui (ctrl+o to expand)
+
+● Skill(feature-model)
+  ⎿  Successfully loaded skill
+
+● Skill(embedded-feature-annotation)
+  ⎿  Successfully loaded skill
+
+● Both skills loaded. Exploring codebase structure now.
+
+● Explore(Explore ReferenceManager codebase)
+  ⎿  Done (21 tool uses · 87.9k tokens · 47s)
+  (ctrl+o to expand)
+
+● Good. Reading key files before editing.
+
+  Read 6 files (ctrl+o to expand)
+
+● Got all context. Planning implementation:
+  - New Collection model (many-to-many with Paper)
+  - Update feature model + DbContext + Program.cs
+  - EF migration
+
+  Starting all writes now.
+
+● Update(.feature-model)
+  ⎿  Added 7 lines
+       6          GetPaper
+       7          UpdatePaper
+       8          DeletePaper
+       9 +    Collections                                                
+      10 +        CreateCollection                                       
+      11 +        GetCollection                                          
+      12 +        UpdateCollection                                       
+      13 +        DeleteCollection                                       
+      14 +        AddPaperToCollection                                   
+      15 +        RemovePaperFromCollection                              
+
+● Write(Models/Collection.cs)
+  ⎿  Wrote 9 lines to Models/Collection.cs
+      1 namespace ReferenceManager.Models;
+      2 
+      3 public class Collection
+      4 {
+      5     public int Id { get; set; }
+      6     public string Name { get; set; } = string.Empty;
+      7     public string? Description { get; set; }
+      8     public List<Paper> Papers { get; set; } = [];
+      9 }
+
+● Update(Models/Paper.cs)
+  ⎿  Added 1 line
+       8      public int Year { get; set; }
+       9      public string? Abstract { get; set; }
+      10      public string? Doi { get; set; }
+      11 +    public List<Collection> Collections { get; set; } = []; // 
+         +&line[Collections]                                             
+      12  }
+
+● Update(Models/.feature-to-file)
+  ⎿  Added 2 lines
+      4  Papers
+      5  Affiliation.cs
+      6  Papers
+      7 +Collection.cs                                                   
+      8 +Collections                                                     
+
+● Update(Data/AppDbContext.cs)
+  ⎿  Added 8 lines
+       6  public class AppDbContext(DbContextOptions<AppDbContext> option
+          s) : DbContext(options)
+       7  {
+       8      public DbSet<Paper> Papers => Set<Paper>();
+       9 +    public DbSet<Collection> Collections => Set<Collection>(); 
+         +// &line[Collections]                                          
+      10  
+      11      protected override void OnModelCreating(ModelBuilder modelB
+          uilder)
+      12      {
+     ...
+      15              a.ToJson();
+      16              a.OwnsMany(x => x.Affiliations);
+      17          });
+      18 +                                                               
+      19 +        // &begin[Collections]                                 
+      20 +        modelBuilder.Entity<Collection>()                      
+      21 +            .HasMany(c => c.Papers)                            
+      22 +            .WithMany(p => p.Collections)                      
+      23 +            .UsingEntity("PaperCollection");                   
+      24 +        // &end[Collections]                                   
+      25      }
+      26  }
+
+● Now adding collection endpoints and request record to Program.cs.
+
+● Update(Program.cs)
+  ⎿  Added 91 lines
+       98  .WithOpenApi();
+       99  // &end[DeletePaper]
+      100  
+      101 +// &begin[GetCollection]                                      
+      102 +app.MapGet("/collections", async (AppDbContext db) =>         
+      103 +    await db.Collections.ToListAsync())                       
+      104 +    .WithName("ListCollections")                              
+      105 +    .WithOpenApi();                                           
+      106 +                                                              
+      107 +app.MapGet("/collections/{id:int}", async (int id, AppDbContex
+          +t db) =>                                                      
+      108 +    await db.Collections.AsNoTracking().Include(c => c.Papers)
+          +.FirstOrDefaultAsync(c => c.Id == id) is Collection col       
+      109 +        ? Results.Ok(col)                                     
+      110 +        : Results.NotFound())                                 
+      111 +    .WithName("GetCollection")                                
+      112 +    .WithOpenApi();                                           
+      113 +// &end[GetCollection]                                        
+      114 +                                                              
+      115 +// &begin[CreateCollection]                                   
+      116 +app.MapPost("/collections", async (CollectionRequest req, AppD
+          +bContext db) =>                                               
+      117 +{                                                             
+      118 +    var col = new Collection { Name = req.Name, Description = 
+          +req.Description };                                            
+      119 +    db.Collections.Add(col);                                  
+      120 +    await db.SaveChangesAsync();                              
+      121 +    return Results.Created($"/collections/{col.Id}", col);    
+      122 +})                                                            
+      123 +.WithName("CreateCollection")                                 
+      124 +.WithOpenApi();                                               
+      125 +// &end[CreateCollection]                                     
+      126 +                                                              
+      127 +// &begin[UpdateCollection]                                   
+      128 +app.MapPut("/collections/{id:int}", async (int id, CollectionR
+          +equest req, AppDbContext db) =>                               
+      129 +{                                                             
+      130 +    var col = await db.Collections.FindAsync(id);             
+      131 +    if (col is null) return Results.NotFound();               
+      132 +                                                              
+      133 +    col.Name = req.Name;                                      
+      134 +    col.Description = req.Description;                        
+      135 +    await db.SaveChangesAsync();                              
+      136 +    return Results.Ok(col);                                   
+      137 +})                                                            
+      138 +.WithName("UpdateCollection")                                 
+      139 +.WithOpenApi();                                               
+      140 +// &end[UpdateCollection]                                     
+      141 +                                                              
+      142 +// &begin[DeleteCollection]                                   
+      143 +app.MapDelete("/collections/{id:int}", async (int id, AppDbCon
+          +text db) =>                                                   
+      144 +{                                                             
+      145 +    var col = await db.Collections.FindAsync(id);             
+      146 +    if (col is null) return Results.NotFound();               
+      147 +                                                              
+      148 +    db.Collections.Remove(col);                               
+      149 +    await db.SaveChangesAsync();                              
+      150 +    return Results.NoContent();                               
+      151 +})                                                            
+      152 +.WithName("DeleteCollection")                                 
+      153 +.WithOpenApi();                                               
+      154 +// &end[DeleteCollection]                                     
+      155 +                                                              
+      156 +// &begin[AddPaperToCollection]                               
+      157 +app.MapPost("/collections/{id:int}/papers/{paperId:int}", asyn
+          +c (int id, int paperId, AppDbContext db) =>                   
+      158 +{                                                             
+      159 +    var col = await db.Collections.Include(c => c.Papers).Firs
+          +tOrDefaultAsync(c => c.Id == id);                             
+      160 +    if (col is null) return Results.NotFound();               
+      161 +                                                              
+      162 +    var paper = await db.Papers.FindAsync(paperId);           
+      163 +    if (paper is null) return Results.NotFound();             
+      164 +                                                              
+      165 +    if (col.Papers.Any(p => p.Id == paperId)) return Results.C
+          +onflict();                                                    
+      166 +                                                              
+      167 +    col.Papers.Add(paper);                                    
+      168 +    await db.SaveChangesAsync();                              
+      169 +    return Results.NoContent();                               
+      170 +})                                                            
+      171 +.WithName("AddPaperToCollection")                             
+      172 +.WithOpenApi();                                               
+      173 +// &end[AddPaperToCollection]                                 
+      174 +                                                              
+      175 +// &begin[RemovePaperFromCollection]                          
+      176 +app.MapDelete("/collections/{id:int}/papers/{paperId:int}", as
+          +ync (int id, int paperId, AppDbContext db) =>                 
+      177 +{                                                             
+      178 +    var col = await db.Collections.Include(c => c.Papers).Firs
+          +tOrDefaultAsync(c => c.Id == id);                             
+      179 +    if (col is null) return Results.NotFound();               
+      180 +                                                              
+      181 +    var paper = col.Papers.FirstOrDefault(p => p.Id == paperId
+          +);                                                            
+      182 +    if (paper is null) return Results.NotFound();             
+      183 +                                                              
+      184 +    col.Papers.Remove(paper);                                 
+      185 +    await db.SaveChangesAsync();                              
+      186 +    return Results.NoContent();                               
+      187 +})                                                            
+      188 +.WithName("RemovePaperFromCollection")                        
+      189 +.WithOpenApi();                                               
+      190 +// &end[RemovePaperFromCollection]                            
+      191 +                                                              
+      192  app.Run();
+      193  
+      194  static Author ToAuthor(AuthorRequest r) => new()
+
+● Update(Program.cs)
+  ⎿  Added 1 line
+      201  record AffiliationRequest(string Name, string Country, string 
+           City);
+      202  record AuthorRequest(string Name, string? Email, List<Affiliat
+           ionRequest> Affiliations);
+      203  record PaperRequest(string Title, List<AuthorRequest> Authors,
+            int Year, string? Abstract, string? Doi);
+      204 +record CollectionRequest(string Name, string? Description); //
+          + &line[Collections]                                           
+
+● Now running the EF migration.
+● Bash(dotnet ef migrations add AddCollections 2>&1)
+  ⎿  Build started...
+     Build succeeded.
+     Done. To undo this action, use 'ef migrations remove'
+
+● Build succeeded. Verify migration looks right.
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+● Migration is correct - Collections table + PaperCollection join table with
+  cascade delete. Now displaying summary.
+
+  Called fm-gui (ctrl+o to expand)
+
+● Done. Here's what was added:
+
+  New files: Models/Collection.cs
+  Modified: Models/Paper.cs, Data/AppDbContext.cs, Program.cs, .feature-model,
+  Models/.feature-to-file
+  Migration: AddCollections — creates Collections table + PaperCollection join
+  table (cascade delete both ways)
+
+  Endpoints:
+
+  ┌────────┬────────────────────────────────────┬────────────────────────────┐
+  │ Method │               Route                │          Feature           │
+  ├────────┼────────────────────────────────────┼────────────────────────────┤
+  │ GET    │ /collections                       │ GetCollection              │
+  ├────────┼────────────────────────────────────┼────────────────────────────┤
+  │ GET    │ /collections/{id}                  │ GetCollection (includes    │
+  │        │                                    │ papers)                    │
+  ├────────┼────────────────────────────────────┼────────────────────────────┤
+  │ POST   │ /collections                       │ CreateCollection           │
+  ├────────┼────────────────────────────────────┼────────────────────────────┤
+  │ PUT    │ /collections/{id}                  │ UpdateCollection           │
+  ├────────┼────────────────────────────────────┼────────────────────────────┤
+  │ DELETE │ /collections/{id}                  │ DeleteCollection           │
+  ├────────┼────────────────────────────────────┼────────────────────────────┤
+  │ POST   │ /collections/{id}/papers/{paperId} │ AddPaperToCollection (409  │
+  │        │                                    │ if duplicate)              │
+  ├────────┼────────────────────────────────────┼────────────────────────────┤
+  │ DELETE │ /collections/{id}/papers/{paperId} │ RemovePaperFromCollection  │
+  └────────┴────────────────────────────────────┴────────────────────────────┘
+
+  GET /collections/{id} uses AsNoTracking() to prevent circular JSON
+  serialization (Collection → Papers → Collections cycle).
+
+✻ Cooked for 3m 44s
+
+❯ add a proper .gitignore for c# .net and structure project according to        
+  microsoft development guidelines.                                             
+
+● Checking git status and reading feature model.
+
+● Bash(git status && find
+      .
+      -maxdepth 3 -not -path '*/bin/*' -not -path '*/obj/*' | sort)
+  ⎿  On branch main
+     Changes not staged for commit:
+       (use "git add <file>..." to update what will be committed)
+     … +193 lines (ctrl+o to expand)
+
+  Called fm-gui (ctrl+o to expand)
+
+● Uncommitted changes present — from the Collections work we just did. Commit
+  those first before restructuring?
+
+❯ yes                                                                           
+
+● Committing Collections work, then handling .gitignore + restructure.
+
+● Bash(git add .feature-model Data/AppDbContext.cs Data/DbSeeder.cs
+      Migrations/AppDbContextModelSnapshot.cs
+      Migrations/20260424105228_AddCollections.Designer.cs Migrat…)
+  ⎿  (No output)
+
+● Bash(git commit -m "$(cat <<'EOF'
+      feat: add Collections feature with many-to-many paper relationship…)
+  ⎿  [main 01bc4b5] feat: add Collections feature with many-to-many paper r
+     elationship
+      10 files changed, 534 insertions(+)
+     … +5 lines (ctrl+o to expand)
+
+● Now loading skills and proceeding with .gitignore + restructure.
+
+● Skill(feature-model)
+  ⎿  Successfully loaded skill
+
+● Skill(embedded-feature-annotation)
+  ⎿  Successfully loaded skill
+
+● No feature model changes needed — infrastructure + reorganization only.
+
+  Plan: .gitignore, move request records to Requests/ folder, add .sln file.
+
+● Write(.gitignore)
+  ⎿  Wrote 50 lines to .gitignore
+       1 ## Build output
+       2 bin/
+       3 obj/
+       4 
+       5 ## Visual Studio
+       6 .vs/
+       7 *.user
+       8 *.suo
+       9 *.userosscache
+      10 *.sln.docstates
+     … +40 lines (ctrl+o to expand)
+
+● Write(Requests/PaperRequests.cs)
+  ⎿  Wrote 5 lines to Requests/PaperRequests.cs
+      1 namespace ReferenceManager.Requests;
+      2 
+      3 record AffiliationRequest(string Name, string Country, string Cit
+        y);
+      4 record AuthorRequest(string Name, string? Email, List<Affiliation
+        Request> Affiliations);
+      5 record PaperRequest(string Title, List<AuthorRequest> Authors, in
+        t Year, string? Abstract, string? Doi);
+
+● Write(Requests/CollectionRequests.cs)
+  ⎿  Wrote 3 lines to Requests/CollectionRequests.cs
+      1 namespace ReferenceManager.Requests;
+      2 
+      3 record CollectionRequest(string Name, string? Description);
+● Write(Requests/.feature-to-file)
+  ⎿  Wrote 4 lines to Requests/.feature-to-file
+      1 PaperRequests.cs
+      2 Papers
+      3 CollectionRequests.cs
+      4 Collections
+
+● Now update Program.cs — remove the inline records, add the using import.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(Program.cs)
+  ⎿  Added 1 line
+      1  using Microsoft.EntityFrameworkCore;
+      2  using ReferenceManager.Data;
+      3  using ReferenceManager.Models;
+      4 +using ReferenceManager.Requests;                                
+      5  using Scalar.AspNetCore;
+      6  
+      7  var builder = WebApplication.CreateBuilder(args);
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(Program.cs)
+  ⎿  Removed 4 lines
+      199      Affiliations = r.Affiliations.Select(a => new Affiliation 
+           { Name = a.Name, Country = a.Country, City = a.City }).ToList(
+           )
+      200  };
+      201  
+      202 -record AffiliationRequest(string Name, string Country, string 
+          -City);                                                        
+      203 -record AuthorRequest(string Name, string? Email, List<Affiliat
+          -ionRequest> Affiliations);                                    
+      204 -record PaperRequest(string Title, List<AuthorRequest> Authors,
+          - int Year, string? Abstract, string? Doi);                    
+      205 -record CollectionRequest(string Name, string? Description); //
+          - &line[Collections]                                           
+
+● Now add the solution file and verify build.
+
+● Bash(dotnet new sln --name ReferenceManager --output . 2>&1 && dotnet sln add
+      ReferenceManager.csproj 2>&1)
+  ⎿  The template "Solution File" was created successfully.
+
+     Project `ReferenceManager.csproj` added to the solution.
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  Build succeeded.
+         0 Warning(s)
+         0 Error(s)
+     … +2 lines (ctrl+o to expand)
+
+● Clean build. Now display summary.
+
+  Called fm-gui (ctrl+o to expand)
+
+● Anything else to add?
+
+✻ Baked for 1m 22s
+
+❯ please continue with fixing the structure. Right now everything is in the     
+  monolithic program.cs file.                                                   
+  https://gist.github.com/alanwei43/247fdba7be30ee8f36117907109632a4            
+
+● Checking git status and fetching reference.
+
+● Bash(git status)
+  ⎿  On branch main
+     Changes not staged for commit:
+       (use "git add <file>..." to update what will be committed)
+     … +11 lines (ctrl+o to expand)
+
+  Called fm-gui (ctrl+o to expand)
+
+● Skill(feature-model)
+  ⎿  Successfully loaded skill
+
+● Skill(embedded-feature-annotation)
+  ⎿  Successfully loaded skill
+
+● Fetching reference gist and reading current Program.cs.
+
+  Read 1 file (ctrl+o to expand)
+
+● Fetch(https://gist.github.com/alanwei43/247fdba7be30ee8f36117907109632a4)
+  ⎿  Received 379.5KB (200 OK)
+
+● Gist is Microsoft REST API Guidelines (REST conventions, not code structure).
+  Using standard minimal API extension-method pattern to split Program.cs.
+
+  Plan: Endpoints/PaperEndpoints.cs + Endpoints/CollectionEndpoints.cs, each a
+  static class with MapXxx(this WebApplication app). Program.cs becomes lean
+  startup only.
+● Write(Endpoints/PaperEndpoints.cs)
+  ⎿  Wrote 86 lines to Endpoints/PaperEndpoints.cs
+       2 using ReferenceManager.Data;orkCore;
+       3 using ReferenceManager.Models;
+       4 using ReferenceManager.Requests;
+       5 
+       6 namespace ReferenceManager.Endpoints;
+       7 
+       8 public static class PaperEndpoints
+       9 {
+      10     public static void MapPaperEndpoints(this WebApplication app
+         )
+     … +81 lines (ctrl+o to expand)
+
+● Write(Endpoints/CollectionEndpoints.cs)
+  ⎿  Wrote 103 lines to Endpoints/CollectionEndpoints.cs
+       2 using ReferenceManager.Data;orkCore;
+       3 using ReferenceManager.Models;
+       4 using ReferenceManager.Requests;
+       5 
+       6 namespace ReferenceManager.Endpoints;
+       7 
+       8 public static class CollectionEndpoints
+       9 {
+      10     public static void MapCollectionEndpoints(this WebApplicatio
+         n app)
+     … +106 lines (ctrl+o to expand)
+
+❯ https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design 
+
+● Now rewrite Program.cs to lean startup only.
+
+● Write(Program.cs)
+  ⎿  Added 3 lines, removed 166 lines
+      1 -using Microsoft.EntityFrameworkCore;                            
+      1  using ReferenceManager.Data;
+      3 -using ReferenceManager.Models;                                  
+      4 -using ReferenceManager.Requests;                                
+      2 +using ReferenceManager.Endpoints;                               
+      3  using Scalar.AspNetCore;
+      4  
+      5  var builder = WebApplication.CreateBuilder(args);
+     ...
+       32  }
+       33  // &end[Database]
+       34  
+       37 -// &begin[GetPaper]                                           
+       38 -app.MapGet("/papers", async (AppDbContext db) =>              
+       39 -    await db.Papers.ToListAsync())                            
+       40 -    .WithName("ListPapers")                                   
+       41 -    .WithOpenApi();                                           
+       35 +app.MapPaperEndpoints();                                      
+       36 +app.MapCollectionEndpoints();                                 
+       37  
+       43 -app.MapGet("/papers/{id:int}", async (int id, AppDbContext db)
+          - =>                                                           
+       44 -    await db.Papers.FindAsync(id) is Paper paper              
+       45 -        ? Results.Ok(paper)                                   
+       46 -        : Results.NotFound())                                 
+       47 -    .WithName("GetPaper")                                     
+       48 -    .WithOpenApi();                                           
+       49 -// &end[GetPaper]                                             
+       50 -                                                              
+       51 -// &begin[CreatePaper]                                        
+       52 -app.MapPost("/papers", async (PaperRequest req, AppDbContext d
+          -b) =>                                                         
+       53 -{                                                             
+       54 -    var paper = new Paper                                     
+       55 -    {                                                         
+       56 -        Title = req.Title,                                    
+       57 -        Authors = req.Authors.Select(ToAuthor).ToList(),      
+       58 -        Year = req.Year,                                      
+       59 -        Abstract = req.Abstract,                              
+       60 -        Doi = req.Doi                                         
+       61 -    };                                                        
+       62 -    db.Papers.Add(paper);                                     
+       63 -    await db.SaveChangesAsync();                              
+       64 -    return Results.Created($"/papers/{paper.Id}", paper);     
+       65 -})                                                            
+       66 -.WithName("CreatePaper")                                      
+       67 -.WithOpenApi();                                               
+       68 -// &end[CreatePaper]                                          
+       69 -                                                              
+       70 -// &begin[UpdatePaper]                                        
+       71 -app.MapPut("/papers/{id:int}", async (int id, PaperRequest req
+          -, AppDbContext db) =>                                         
+       72 -{                                                             
+       73 -    var paper = await db.Papers.FindAsync(id);                
+       74 -    if (paper is null) return Results.NotFound();             
+       75 -                                                              
+       76 -    paper.Title = req.Title;                                  
+       77 -    paper.Authors = req.Authors.Select(ToAuthor).ToList();    
+       78 -    paper.Year = req.Year;                                    
+       79 -    paper.Abstract = req.Abstract;                            
+       80 -    paper.Doi = req.Doi;                                      
+       81 -    await db.SaveChangesAsync();                              
+       82 -    return Results.Ok(paper);                                 
+       83 -})                                                            
+       84 -.WithName("UpdatePaper")                                      
+       85 -.WithOpenApi();                                               
+       86 -// &end[UpdatePaper]                                          
+       87 -                                                              
+       88 -// &begin[DeletePaper]                                        
+       89 -app.MapDelete("/papers/{id:int}", async (int id, AppDbContext 
+          -db) =>                                                        
+       90 -{                                                             
+       91 -    var paper = await db.Papers.FindAsync(id);                
+       92 -    if (paper is null) return Results.NotFound();             
+       93 -                                                              
+       94 -    db.Papers.Remove(paper);                                  
+       95 -    await db.SaveChangesAsync();                              
+       96 -    return Results.NoContent();                               
+       97 -})                                                            
+       98 -.WithName("DeletePaper")                                      
+       99 -.WithOpenApi();                                               
+      100 -// &end[DeletePaper]                                          
+      101 -                                                              
+      102 -// &begin[GetCollection]                                      
+      103 -app.MapGet("/collections", async (AppDbContext db) =>         
+      104 -    await db.Collections.ToListAsync())                       
+      105 -    .WithName("ListCollections")                              
+      106 -    .WithOpenApi();                                           
+      107 -                                                              
+      108 -app.MapGet("/collections/{id:int}", async (int id, AppDbContex
+          -t db) =>                                                      
+      109 -    await db.Collections.AsNoTracking().Include(c => c.Papers)
+          -.FirstOrDefaultAsync(c => c.Id == id) is Collection col       
+      110 -        ? Results.Ok(col)                                     
+      111 -        : Results.NotFound())                                 
+      112 -    .WithName("GetCollection")                                
+      113 -    .WithOpenApi();                                           
+      114 -// &end[GetCollection]                                        
+      115 -                                                              
+      116 -// &begin[CreateCollection]                                   
+      117 -app.MapPost("/collections", async (CollectionRequest req, AppD
+          -bContext db) =>                                               
+      118 -{                                                             
+      119 -    var col = new Collection { Name = req.Name, Description = 
+          -req.Description };                                            
+      120 -    db.Collections.Add(col);                                  
+      121 -    await db.SaveChangesAsync();                              
+      122 -    return Results.Created($"/collections/{col.Id}", col);    
+      123 -})                                                            
+      124 -.WithName("CreateCollection")                                 
+      125 -.WithOpenApi();                                               
+      126 -// &end[CreateCollection]                                     
+      127 -                                                              
+      128 -// &begin[UpdateCollection]                                   
+      129 -app.MapPut("/collections/{id:int}", async (int id, CollectionR
+          -equest req, AppDbContext db) =>                               
+      130 -{                                                             
+      131 -    var col = await db.Collections.FindAsync(id);             
+      132 -    if (col is null) return Results.NotFound();               
+      133 -                                                              
+      134 -    col.Name = req.Name;                                      
+      135 -    col.Description = req.Description;                        
+      136 -    await db.SaveChangesAsync();                              
+      137 -    return Results.Ok(col);                                   
+      138 -})                                                            
+      139 -.WithName("UpdateCollection")                                 
+      140 -.WithOpenApi();                                               
+      141 -// &end[UpdateCollection]                                     
+      142 -                                                              
+      143 -// &begin[DeleteCollection]                                   
+      144 -app.MapDelete("/collections/{id:int}", async (int id, AppDbCon
+          -text db) =>                                                   
+      145 -{                                                             
+      146 -    var col = await db.Collections.FindAsync(id);             
+      147 -    if (col is null) return Results.NotFound();               
+      148 -                                                              
+      149 -    db.Collections.Remove(col);                               
+      150 -    await db.SaveChangesAsync();                              
+      151 -    return Results.NoContent();                               
+      152 -})                                                            
+      153 -.WithName("DeleteCollection")                                 
+      154 -.WithOpenApi();                                               
+      155 -// &end[DeleteCollection]                                     
+      156 -                                                              
+      157 -// &begin[AddPaperToCollection]                               
+      158 -app.MapPost("/collections/{id:int}/papers/{paperId:int}", asyn
+          -c (int id, int paperId, AppDbContext db) =>                   
+      159 -{                                                             
+      160 -    var col = await db.Collections.Include(c => c.Papers).Firs
+          -tOrDefaultAsync(c => c.Id == id);                             
+      161 -    if (col is null) return Results.NotFound();               
+      162 -                                                              
+      163 -    var paper = await db.Papers.FindAsync(paperId);           
+      164 -    if (paper is null) return Results.NotFound();             
+      165 -                                                              
+      166 -    if (col.Papers.Any(p => p.Id == paperId)) return Results.C
+          -onflict();                                                    
+      167 -                                                              
+      168 -    col.Papers.Add(paper);                                    
+      169 -    await db.SaveChangesAsync();                              
+      170 -    return Results.NoContent();                               
+      171 -})                                                            
+      172 -.WithName("AddPaperToCollection")                             
+      173 -.WithOpenApi();                                               
+      174 -// &end[AddPaperToCollection]                                 
+      175 -                                                              
+      176 -// &begin[RemovePaperFromCollection]                          
+      177 -app.MapDelete("/collections/{id:int}/papers/{paperId:int}", as
+          -ync (int id, int paperId, AppDbContext db) =>                 
+      178 -{                                                             
+      179 -    var col = await db.Collections.Include(c => c.Papers).Firs
+          -tOrDefaultAsync(c => c.Id == id);                             
+      180 -    if (col is null) return Results.NotFound();               
+      181 -                                                              
+      182 -    var paper = col.Papers.FirstOrDefault(p => p.Id == paperId
+          -);                                                            
+      183 -    if (paper is null) return Results.NotFound();             
+      184 -                                                              
+      185 -    col.Papers.Remove(paper);                                 
+      186 -    await db.SaveChangesAsync();                              
+      187 -    return Results.NoContent();                               
+      188 -})                                                            
+      189 -.WithName("RemovePaperFromCollection")                        
+      190 -.WithOpenApi();                                               
+      191 -// &end[RemovePaperFromCollection]                            
+      192 -                                                              
+       38  app.Run();
+      194 -                                                              
+      195 -static Author ToAuthor(AuthorRequest r) => new()              
+      196 -{                                                             
+      197 -    Name = r.Name,                                            
+      198 -    Email = r.Email,                                          
+      199 -    Affiliations = r.Affiliations.Select(a => new Affiliation 
+          -{ Name = a.Name, Country = a.Country, City = a.City }).ToList(
+          -)                                                             
+      200 -};                                                            
+      201 -                                                              
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  ./P
+     rogram.cs(30,23): error CS1061: 'DatabaseFacade' does not contain a de
+     finition for 'MigrateAsync' and no accessible extension method 'Migrat
+     … +8 lines (ctrl+o to expand)
+
+● Fetch(https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-
+       design)
+  ⎿  Received 49.2KB (200 OK)
+
+● Missing using Microsoft.EntityFrameworkCore; - fixing.
+
+● Update(Program.cs)
+  ⎿  Added 1 line
+      1 +using Microsoft.EntityFrameworkCore;                            
+      2  using ReferenceManager.Data;
+      3  using ReferenceManager.Endpoints;
+      4  using Scalar.AspNetCore;
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  Build succeeded.
+         0 Warning(s)
+         0 Error(s)
+     … +2 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● Build clean. Reading more of the MS API design guide.
+
+  Read 1 file (ctrl+o to expand)
+
+● Structure split is done. Final project layout now:
+
+  Endpoints/
+      PaperEndpoints.cs    (MapPaperEndpoints)
+      CollectionEndpoints.cs (MapCollectionEndpoints)
+  Requests/
+      PaperRequests.cs
+      CollectionRequests.cs
+  Models/ Data/ Migrations/ Properties/
+  Program.cs  ← lean startup only
+
+  Displaying summary, then covering what the MS REST API guide flags.
+
+  Called fm-gui (ctrl+o to expand)
+
+● Structure work is done. From the MS REST API design guide, three things the
+  current API doesn't yet do:
+
+  ┌─────────────┬───────────────────────────┬───────────────────────────────┐
+  │     Gap     │        Guide says         │            Impact             │
+  ├─────────────┼───────────────────────────┼───────────────────────────────┤
+  │ No          │ URI prefix /v1/ or        │ High — breaking changes       │
+  │ versioning  │ api-version query param   │ without versioning are        │
+  │             │                           │ painful                       │
+  ├─────────────┼───────────────────────────┼───────────────────────────────┤
+  │ No          │ GET /papers with          │ Medium — list grows unbounded │
+  │ pagination  │ limit/offset query params │                               │
+  ├─────────────┼───────────────────────────┼───────────────────────────────┤
+  │ No PATCH    │ Partial update vs full    │ Low — PUT works, just less    │
+  │             │ PUT                       │ efficient                     │
+  └─────────────┴───────────────────────────┴───────────────────────────────┘
+
+  Current code does comply with: plural noun URIs, correct status codes (201 +
+  Location on POST, 204 on DELETE, 409 on duplicate), collection/item/collection
+   max URI depth.
+
+  Want me to add versioning (/api/v1/) and pagination to the list endpoints?
+
+✻ Worked for 2m 18s
+
+❯ Commit this and add some test data for collections. For example add a         
+  collection with papers that I have referenced in my accepted papers check     
+  vault for which papers have been accepted.                                    
+
+● Checking git status, feature model, DbSeeder, and vault simultaneously.
+
+● Bash(git status)
+  ⎿  On branch main
+     Changes not staged for commit:
+       (use "git add <file>..." to update what will be committed)
+     … +12 lines (ctrl+o to expand)
+
+  Read 1 file, called fm-gui (ctrl+o to expand)
+
+● Loading skills and searching vault for accepted papers.
+
+● Skill(feature-model)  ⎿  Successfully loaded skill
+
+● Skill(embedded-feature-annotation)
+  ⎿  Successfully loaded skill
+
+  Called writing-vault 2 times (ctrl+o to expand)
+
+● Checking vault co-authors before writing seeder.
+
+  Called writing-vault (ctrl+o to expand)
+
+● Have all the info. Committing structure first, then updating seeder with
+  accepted papers collection.
+
+● Bash(git add .gitignore ReferenceManager.sln Program.cs Endpoints/ Requests/
+      && git commit -m "$(cat <<'EOF'
+      refactor: split monolithic Program.cs into endpoint clas…)
+  ⎿  [main 30a3a16] refactor: split monolithic Program.cs into endpoint cla
+     sses
+      8 files changed, 276 insertions(+), 168 deletions(-)
+     … +7 lines (ctrl+o to expand)
+
+● Now updating DbSeeder with the 5 missing accepted papers and an "Accepted
+  Papers" collection.
+
+● Write(Data/DbSeeder.cs)
+  ⎿  Added 220 lines, removed 122 lines
+        7  {
+        8      public static async Task SeedAsync(AppDbContext db)
+        9      {
+       10 -        if (await db.Papers.AnyAsync()) return;               
+       10 +        if (!await db.Papers.AnyAsync())                      
+       11 +        {                                                     
+       12 +            db.Papers.AddRange(                               
+       13 +                new Paper                                     
+       14 +                {                                             
+       15 +                    Title = "HAnS: IDE-Based Editing Support f
+          +or Embedded Feature Annotations",                             
+       16 +                    Year = 2021,                              
+       17 +                    Abstract = "Presents HAnS, an IntelliJ plu
+          +gin for editing embedded feature annotations in source code, p
+          +roviding features such as code completion, navigation, and con
+          +sistency checking.",                                          
+       18 +                    Doi = null,                               
+       19 +                    Authors =                                 
+       20 +                    [                                         
+       21 +                        new() { Name = "A. Developer", Emai
+          +l = null, Affiliations = [new() { Name = "Chalmers University 
+          +of Technology", City = "Gothenburg", Country = "Sweden" }] }, 
+       22 +                        new() { Name = "Herman Jansson", Email
+          + = null, Affiliations = [new() { Name = "Chalmers University o
+          +f Technology", City = "Gothenburg", Country = "Sweden" }] },  
+       23 +                        new() { Name = "Mukelabai Mukelabai", 
+          +Email = null, Affiliations = [new() { Name = "Chalmers Univers
+          +ity of Technology", City = "Gothenburg", Country = "Sweden" }]
+          + },                                                           
+       24 +                        new() { Name = "Thorsten Berger", Emai
+          +l = null, Affiliations = [new() { Name = "Chalmers University 
+          +of Technology", City = "Gothenburg", Country = "Sweden" }] }, 
+       25 +                        new() { Name = "Alexandre Bergel", Ema
+          +il = null, Affiliations = [new() { Name = "University of Chile
+          +", City = "Santiago", Country = "Chile" }] },                 
+       26 +                        new() { Name = "Truong Ho-Quang", Emai
+          +l = null, Affiliations = [new() { Name = "Chalmers University 
+          +of Technology", City = "Gothenburg", Country = "Sweden" }] }, 
+       27 +                    ]                                         
+       28 +                },                                            
+       29 +                new Paper                                     
+       30 +                {                                             
+       31 +                    Title = "What Is a Feature? A Qualitative 
+          +Study of Features in Industrial Software Product Lines",      
+       32 +                    Year = 2015,                              
+       33 +                    Abstract = "Reports a qualitative study in
+          +vestigating what practitioners consider to be features in indu
+          +strial software product lines across multiple companies.",    
+       34 +                    Doi = null,                               
+       35 +                    Authors =                                 
+       36 +                    [                                         
+       37 +                        new() { Name = "Thorsten Berger", Emai
+          +l = null, Affiliations = [new() { Name = "Chalmers University 
+          +of Technology", City = "Gothenburg", Country = "Sweden" }] }, 
+       38 +                        new() { Name = "Daniela Lettner", Emai
+          +l = null, Affiliations = [new() { Name = "Johannes Kepler Univ
+          +ersity Linz", City = "Linz", Country = "Austria" }] },        
+       39 +                        new() { Name = "Julia Rubin", Email = 
+          +null, Affiliations = [new() { Name = "University of British Co
+          +lumbia", City = "Vancouver", Country = "Canada" }] },         
+       40 +                        new() { Name = "Paul Grünbacher", Emai
+          +l = null, Affiliations = [new() { Name = "Johannes Kepler Univ
+          +ersity Linz", City = "Linz", Country = "Austria" }] },        
+       41 +                        new() { Name = "Adeline Silva", Email 
+          += null, Affiliations = [] },                                  
+       42 +                        new() { Name = "Martin Becker", Email 
+          += null, Affiliations = [] },                                  
+       43 +                        new() { Name = "Marsha Chechik", Email
+          + = null, Affiliations = [new() { Name = "University of Toronto
+          +", City = "Toronto", Country = "Canada" }] },                 
+       44 +                        new() { Name = "Krzysztof Czarnecki", 
+          +Email = null, Affiliations = [new() { Name = "University of Wa
+          +terloo", City = "Waterloo", Country = "Canada" }] },          
+       45 +                    ]                                         
+       46 +                },                                            
+       47 +                new Paper                                     
+       48 +                {                                             
+       49 +                    Title = "Variability Mining with LEADT",  
+       50 +                    Year = 2011,                              
+       51 +                    Abstract = "Presents LEADT, a tool for min
+          +ing feature-to-code mappings from preprocessor-based software 
+          +product lines.",                                              
+       52 +                    Doi = null,                               
+       53 +                    Authors =                                 
+       54 +                    [                                         
+       55 +                        new() { Name = "Christian Kästner", Em
+          +ail = null, Affiliations = [new() { Name = "Philipps-Universit
+          +ät Marburg", City = "Marburg", Country = "Germany" }] },      
+       56 +                        new() { Name = "Alexander Dreiling", E
+          +mail = null, Affiliations = [new() { Name = "Philipps-Universi
+          +tät Marburg", City = "Marburg", Country = "Germany" }] },     
+       57 +                        new() { Name = "Klaus Ostermann", Emai
+          +l = null, Affiliations = [new() { Name = "Philipps-Universität
+          + Marburg", City = "Marburg", Country = "Germany" }] },        
+       58 +                    ]                                         
+       59 +                },                                            
+       60 +                new Paper                                     
+       61 +                {                                             
+       62 +                    Title = "Feature-Oriented Software Product
+          + Lines: Concepts and Implementation",                         
+       63 +                    Year = 2013,                              
+       64 +                    Abstract = "A comprehensive textbook cover
+          +ing the theory and practice of feature-oriented software produ
+          +ct lines, including feature modeling, variability implementati
+          +on, and product derivation.",                                 
+       65 +                    Doi = "10.1007/978-3-642-37521-7",        
+       66 +                    Authors =                                 
+       67 +                    [                                         
+       68 +                        new() { Name = "Sven Apel", Email = nu
+          +ll, Affiliations = [new() { Name = "University of Passau", Cit
+          +y = "Passau", Country = "Germany" }] },                       
+       69 +                        new() { Name = "Don Batory", Email = n
+          +ull, Affiliations = [new() { Name = "University of Texas at Au
+          +stin", City = "Austin", Country = "USA" }] },                 
+       70 +                        new() { Name = "Christian Kästner", Em
+          +ail = null, Affiliations = [new() { Name = "Carnegie Mellon Un
+          +iversity", City = "Pittsburgh", Country = "USA" }] },         
+       71 +                        new() { Name = "Gunter Saake", Email =
+          + null, Affiliations = [new() { Name = "University of Magdeburg
+          +", City = "Magdeburg", Country = "Germany" }] },              
+       72 +                    ]                                         
+       73 +                },                                            
+       74 +                new Paper                                     
+       75 +                {                                             
+       76 +                    Title = "Feature-Oriented Domain Analysis 
+          +(FODA) Feasibility Study",                                    
+       77 +                    Year = 1990,                              
+       78 +                    Abstract = "Introduces Feature-Oriented Do
+          +main Analysis, a method for identifying and organizing the fea
+          +tures of software systems in a domain to support reuse.",     
+       79 +                    Doi = null,                               
+       80 +                    Authors =                                 
+       81 +                    [                                         
+       82 +                        new() { Name = "Kyo Kang", Email = nul
+          +l, Affiliations = [new() { Name = "Software Engineering Instit
+          +ute", City = "Pittsburgh", Country = "USA" }, new() { Name = "
+          +Carnegie Mellon University", City = "Pittsburgh", Country = "U
+          +SA" }] },                                                     
+       83 +                        new() { Name = "Sholom Cohen", Email =
+          + null, Affiliations = [new() { Name = "Software Engineering In
+          +stitute", City = "Pittsburgh", Country = "USA" }] },          
+       84 +                        new() { Name = "James Hess", Email = n
+          +ull, Affiliations = [new() { Name = "Software Engineering Inst
+          +itute", City = "Pittsburgh", Country = "USA" }] },            
+       85 +                        new() { Name = "William Nowak", Email 
+          += null, Affiliations = [new() { Name = "Software Engineering I
+          +nstitute", City = "Pittsburgh", Country = "USA" }] },         
+       86 +                        new() { Name = "Spencer Peterson", Ema
+          +il = null, Affiliations = [new() { Name = "Software Engineerin
+          +g Institute", City = "Pittsburgh", Country = "USA" }] },      
+       87 +                    ]                                         
+       88 +                },                                            
+       89 +                new Paper                                     
+       90 +                {                                             
+       91 +                    Title = "FeatureIDE: An Extensible Framewo
+          +rk for Feature-Oriented Software Development",                
+       92 +                    Year = 2014,                              
+       93 +                    Abstract = "Presents FeatureIDE, an Eclips
+          +e-based framework that supports all phases of feature-oriented
+          + software development, from domain analysis to product derivat
+          +ion.",                                                        
+       94 +                    Doi = null,                               
+       95 +                    Authors =                                 
+       96 +                    [                                         
+       97 +                        new() { Name = "Thomas Thüm", Email = 
+          +null, Affiliations = [new() { Name = "University of Magdeburg"
+          +, City = "Magdeburg", Country = "Germany" }] },               
+       98 +                        new() { Name = "Christian Kästner", Em
+          +ail = null, Affiliations = [new() { Name = "Carnegie Mellon Un
+          +iversity", City = "Pittsburgh", Country = "USA" }] },         
+       99 +                        new() { Name = "Fabian Benduhn", Email
+          + = null, Affiliations = [new() { Name = "University of Magdebu
+          +rg", City = "Magdeburg", Country = "Germany" }] },            
+      100 +                        new() { Name = "Jens Meinicke", Email 
+          += null, Affiliations = [new() { Name = "University of Magdebur
+          +g", City = "Magdeburg", Country = "Germany" }] },             
+      101 +                        new() { Name = "Gunter Saake", Email =
+          + null, Affiliations = [new() { Name = "University of Magdeburg
+          +", City = "Magdeburg", Country = "Germany" }] },              
+      102 +                        new() { Name = "Thomas Leich", Email =
+          + null, Affiliations = [new() { Name = "Metop GmbH", City = "Ma
+          +gdeburg", Country = "Germany" }] },                           
+      103 +                    ]                                         
+      104 +                },                                            
+      105 +                new Paper                                     
+      106 +                {                                             
+      107 +                    Title = "FM-PRO: A Feature Modeling Proces
+          +s",                                                           
+      108 +                    Year = 2025,                              
+      109 +                    Abstract = "Presents FM-PRO, an empiricall
+          +y grounded process for feature modeling in software product li
+          +nes, evaluated through a multi-year industrial case study.",  
+      110 +                    Doi = "10.1109/TSE.2024.3513635",         
+      111 +                    Authors =                                 
+      112 +                    [                                         
+      113 +                        new() { Name = "A. Developer", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      114 +                        new() { Name = "Wardah Mahmood", Email
+          + = null, Affiliations = [new() { Name = "Chalmers University o
+          +f Technology", City = "Gothenburg", Country = "Sweden" }] },  
+      115 +                        new() { Name = "Jude Gyimah", Email = 
+          +null, Affiliations = [new() { Name = "Chalmers University of T
+          +echnology", City = "Gothenburg", Country = "Sweden" }] },     
+      116 +                        new() { Name = "Thorsten Berger", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      117 +                    ]                                         
+      118 +                },                                            
+      119 +                new Paper                                     
+      120 +                {                                             
+      121 +                    Title = "FeatRacer: Locating Features Thro
+          +ugh Assisted Traceability",                                   
+      122 +                    Year = 2023,                              
+      123 +                    Abstract = "Presents FeatRacer, an approac
+          +h and tool for locating features in source code through assist
+          +ed traceability, combining automated analysis with human guida
+          +nce.",                                                        
+      124 +                    Doi = "10.1109/TSE.2023.3290613",         
+      125 +                    Authors =                                 
+      126 +                    [                                         
+      127 +                        new() { Name = "Mukelabai Mukelabai", 
+          +Email = null, Affiliations = [new() { Name = "Chalmers Univers
+          +ity of Technology", City = "Gothenburg", Country = "Sweden" }]
+          + },                                                           
+      128 +                        new() { Name = "Kevin Hermann", Email 
+          += null, Affiliations = [new() { Name = "Chalmers University of
+          + Technology", City = "Gothenburg", Country = "Sweden" }] },   
+      129 +                        new() { Name = "Thorsten Berger", Emai
+          +l = null, Affiliations = [new() { Name = "Chalmers University 
+          +of Technology", City = "Gothenburg", Country = "Sweden" }] }, 
+      130 +                        new() { Name = "Jan-Philipp Steghöfer"
+          +, Email = null, Affiliations = [new() { Name = "Chalmers Unive
+          +rsity of Technology", City = "Gothenburg", Country = "Sweden" 
+          +}] },                                                         
+      131 +                    ]                                         
+      132 +                },                                            
+      133 +                // &begin[Collections]                        
+      134 +                new Paper                                     
+      135 +                {                                             
+      136 +                    Title = "On Using LLMs to 'Featurize' Soft
+          +ware",                                                        
+      137 +                    Year = 2024,                              
+      138 +                    Abstract = "Reports exploratory experiment
+          +s on using large language models to featurize software; define
+          +s featurization precisely and determines the potential and lim
+          +itations of current LLMs for this task.",                     
+      139 +                    Doi = null,                               
+      140 +                    Authors =                                 
+      141 +                    [                                         
+      142 +                        new() { Name = "A. Developer", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      143 +                        new() { Name = "Thorsten Berger", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      144 +                    ]                                         
+      145 +                },                                            
+      146 +                new Paper                                     
+      147 +                {                                             
+      148 +                    Title = "An IDE Plugin for Clone Managemen
+          +t in Software Product Lines",                                 
+      149 +                    Year = 2024,                              
+      150 +                    Abstract = "Presents an extension of HAnS 
+          +with clone management capabilities using a lightweight trace d
+          +atabase to support synchronization of cloned assets across sof
+          +tware product line variants.",                                
+      151 +                    Doi = null,                               
+      152 +                    Authors =                                 
+      153 +                    [                                         
+      154 +                        new() { Name = "A. Developer", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      155 +                        new() { Name = "Ahmad Al Shihabi", Ema
+          +il = null, Affiliations = [new() { Name = "Ruhr-Universität Bo
+          +chum", City = "Bochum", Country = "Germany" }] },             
+      156 +                        new() { Name = "Jan Sollmann", Email =
+          + null, Affiliations = [new() { Name = "Ruhr-Universität Bochum
+          +", City = "Bochum", Country = "Germany" }] },                 
+      157 +                        new() { Name = "Wardah Mahmood", Email
+          + = null, Affiliations = [new() { Name = "Chalmers University o
+          +f Technology", City = "Gothenburg", Country = "Sweden" }] },  
+      158 +                        new() { Name = "Thorsten Berger", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      159 +                    ]                                         
+      160 +                },                                            
+      161 +                new Paper                                     
+      162 +                {                                             
+      163 +                    Title = "Visualizing Feature-Oriented Soft
+          +ware Evolution",                                              
+      164 +                    Year = 2025,                              
+      165 +                    Abstract = "Presents a feature evolution t
+          +imeline IntelliJ plugin that visualizes feature evolution via 
+          +traceability links and commit history, lifting abstraction to 
+          +the feature level; validated through three action research cyc
+          +les and a controlled experiment.",                            
+      166 +                    Doi = null,                               
+      167 +                    Authors =                                 
+      168 +                    [                                         
+      169 +                        new() { Name = "A. Developer", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      170 +                        new() { Name = "Thorsten Berger", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      171 +                    ]                                         
+      172 +                },                                            
+      173 +                new Paper                                     
+      174 +                {                                             
+      175 +                    Title = "Lightweight Visualization of Soft
+          +ware Features with HAnS-viz",                                 
+      176 +                    Year = 2025,                              
+      177 +                    Abstract = "Presents HAnS-viz, an IntelliJ
+          + plugin providing feature-oriented visualizations that build o
+          +n HAnS embedded annotations to lift code-level assets to featu
+          +re-level representations.",                                   
+      178 +                    Doi = null,                               
+      179 +                    Authors =                                 
+      180 +                    [                                         
+      181 +                        new() { Name = "A. Developer", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      182 +                        new() { Name = "Thorsten Berger", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      183 +                    ]                                         
+      184 +                },                                            
+      185 +                new Paper                                     
+      186 +                {                                             
+      187 +                    Title = "Towards Decentralized Feature Mod
+          +els",                                                         
+      188 +                    Year = 2026,                              
+      189 +                    Abstract = "Proposes a framework for decen
+          +tralized feature modeling; studies core concerns including pla
+          +cement, scope, cross-model dependencies, reuse, and integratio
+          +n through a 15-year systematic literature review.",           
+      190 +                    Doi = null,                               
+      191 +                    Authors =                                 
+      192 +                    [                                         
+      193 +                        new() { Name = "A. Developer", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      194 +                        new() { Name = "Wardah Mahmood", Email
+          + = null, Affiliations = [new() { Name = "Chalmers University o
+          +f Technology", City = "Gothenburg", Country = "Sweden" }] },  
+      195 +                        new() { Name = "Mukelabai Mukelabai", 
+          +Email = null, Affiliations = [new() { Name = "Ruhr-Universität
+          + Bochum", City = "Bochum", Country = "Germany" }] },          
+      196 +                        new() { Name = "Rafael Capilla", Email
+          + = null, Affiliations = [new() { Name = "Rey Juan Carlos Unive
+          +rsity", City = "Madrid", Country = "Spain" }] },              
+      197 +                        new() { Name = "Thorsten Berger", Emai
+          +l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          +hum", City = "Bochum", Country = "Germany" }] },              
+      198 +                    ]                                         
+      199 +                }                                             
+      200 +                // &end[Collections]                          
+      201 +            );                                                
+      202  
+       12 -        db.Papers.AddRange(                                   
+       13 -            new Paper                                         
+      203 +            await db.SaveChangesAsync();                      
+      204 +        }                                                     
+      205 +                                                              
+      206 +        // &begin[Collections]                                
+      207 +        if (!await db.Collections.AnyAsync())                 
+      208 +        {                                                     
+      209 +            var acceptedTitles = new HashSet<string>          
+      210              {
+       15 -                Title = "HAnS: IDE-Based Editing Support for E
+          -mbedded Feature Annotations",                                 
+       16 -                Year = 2021,                                  
+       17 -                Abstract = "Presents HAnS, an IntelliJ plugin 
+          -for editing embedded feature annotations in source code, provi
+          -ding features such as code completion, navigation, and consist
+          -ency checking.",                                              
+       18 -                Doi = null,                                   
+       19 -                Authors =                                     
+       20 -                [                                             
+       21 -                    new() { Name = "A. Developer", Email = 
+          -null, Affiliations = [new() { Name = "Chalmers University of T
+          -echnology", City = "Gothenburg", Country = "Sweden" }] },     
+       22 -                    new() { Name = "Herman Jansson", Email = n
+          -ull, Affiliations = [new() { Name = "Chalmers University of Te
+          -chnology", City = "Gothenburg", Country = "Sweden" }] },      
+       23 -                    new() { Name = "Mukelabai Mukelabai", Emai
+          -l = null, Affiliations = [new() { Name = "Chalmers University 
+          -of Technology", City = "Gothenburg", Country = "Sweden" }] }, 
+       24 -                    new() { Name = "Thorsten Berger", Email = 
+          -null, Affiliations = [new() { Name = "Chalmers University of T
+          -echnology", City = "Gothenburg", Country = "Sweden" }] },     
+       25 -                    new() { Name = "Alexandre Bergel", Email =
+          - null, Affiliations = [new() { Name = "University of Chile", C
+          -ity = "Santiago", Country = "Chile" }] },                     
+       26 -                    new() { Name = "Truong Ho-Quang", Email = 
+          -null, Affiliations = [new() { Name = "Chalmers University of T
+          -echnology", City = "Gothenburg", Country = "Sweden" }] },     
+       27 -                ]                                             
+       28 -            },                                                
+       29 -            new Paper                                         
+      211 +                "HAnS: IDE-Based Editing Support for Embedded 
+          +Feature Annotations",                                         
+      212 +                "On Using LLMs to 'Featurize' Software",      
+      213 +                "FM-PRO: A Feature Modeling Process",         
+      214 +                "An IDE Plugin for Clone Management in Softwar
+          +e Product Lines",                                             
+      215 +                "Visualizing Feature-Oriented Software Evoluti
+          +on",                                                          
+      216 +                "Lightweight Visualization of Software Feature
+          +s with HAnS-viz",                                             
+      217 +                "Towards Decentralized Feature Models"        
+      218 +            };                                                
+      219 +                                                              
+      220 +            var acceptedPapers = await db.Papers              
+      221 +                .Where(p => acceptedTitles.Contains(p.Title)) 
+      222 +                .ToListAsync();                               
+      223 +                                                              
+      224 +            db.Collections.Add(new Collection                 
+      225              {
+       31 -                Title = "What Is a Feature? A Qualitative Stud
+          -y of Features in Industrial Software Product Lines",          
+       32 -                Year = 2015,                                  
+       33 -                Abstract = "Reports a qualitative study invest
+          -igating what practitioners consider to be features in industri
+          -al software product lines across multiple companies.",        
+       34 -                Doi = null,                                   
+       35 -                Authors =                                     
+       36 -                [                                             
+       37 -                    new() { Name = "Thorsten Berger", Email = 
+          -null, Affiliations = [new() { Name = "Chalmers University of T
+          -echnology", City = "Gothenburg", Country = "Sweden" }] },     
+       38 -                    new() { Name = "Daniela Lettner", Email = 
+          -null, Affiliations = [new() { Name = "Johannes Kepler Universi
+          -ty Linz", City = "Linz", Country = "Austria" }] },            
+       39 -                    new() { Name = "Julia Rubin", Email = null
+          -, Affiliations = [new() { Name = "University of British Columb
+          -ia", City = "Vancouver", Country = "Canada" }] },             
+       40 -                    new() { Name = "Paul Grünbacher", Email = 
+          -null, Affiliations = [new() { Name = "Johannes Kepler Universi
+          -ty Linz", City = "Linz", Country = "Austria" }] },            
+       41 -                    new() { Name = "Adeline Silva", Email = nu
+          -ll, Affiliations = [] },                                      
+       42 -                    new() { Name = "Martin Becker", Email = nu
+          -ll, Affiliations = [] },                                      
+       43 -                    new() { Name = "Marsha Chechik", Email = n
+          -ull, Affiliations = [new() { Name = "University of Toronto", C
+          -ity = "Toronto", Country = "Canada" }] },                     
+       44 -                    new() { Name = "Krzysztof Czarnecki", Emai
+          -l = null, Affiliations = [new() { Name = "University of Waterl
+          -oo", City = "Waterloo", Country = "Canada" }] },              
+       45 -                ]                                             
+       46 -            },                                                
+       47 -            new Paper                                         
+       48 -            {                                                 
+       49 -                Title = "Variability Mining with LEADT",      
+       50 -                Year = 2011,                                  
+       51 -                Abstract = "Presents LEADT, a tool for mining 
+          -feature-to-code mappings from preprocessor-based software prod
+          -uct lines.",                                                  
+       52 -                Doi = null,                                   
+       53 -                Authors =                                     
+       54 -                [                                             
+       55 -                    new() { Name = "Christian Kästner", Email 
+          -= null, Affiliations = [new() { Name = "Philipps-Universität M
+          -arburg", City = "Marburg", Country = "Germany" }] },          
+       56 -                    new() { Name = "Alexander Dreiling", Email
+          - = null, Affiliations = [new() { Name = "Philipps-Universität 
+          -Marburg", City = "Marburg", Country = "Germany" }] },         
+       57 -                    new() { Name = "Klaus Ostermann", Email = 
+          -null, Affiliations = [new() { Name = "Philipps-Universität Mar
+          -burg", City = "Marburg", Country = "Germany" }] },            
+       58 -                ]                                             
+       59 -            },                                                
+       60 -            new Paper                                         
+       61 -            {                                                 
+       62 -                Title = "Feature-Oriented Software Product Lin
+          -es: Concepts and Implementation",                             
+       63 -                Year = 2013,                                  
+       64 -                Abstract = "A comprehensive textbook covering 
+          -the theory and practice of feature-oriented software product l
+          -ines, including feature modeling, variability implementation, 
+          -and product derivation.",                                     
+       65 -                Doi = "10.1007/978-3-642-37521-7",            
+       66 -                Authors =                                     
+       67 -                [                                             
+       68 -                    new() { Name = "Sven Apel", Email = null, 
+          -Affiliations = [new() { Name = "University of Passau", City = 
+          -"Passau", Country = "Germany" }] },                           
+       69 -                    new() { Name = "Don Batory", Email = null,
+          - Affiliations = [new() { Name = "University of Texas at Austin
+          -", City = "Austin", Country = "USA" }] },                     
+       70 -                    new() { Name = "Christian Kästner", Email 
+          -= null, Affiliations = [new() { Name = "Carnegie Mellon Univer
+          -sity", City = "Pittsburgh", Country = "USA" }] },             
+       71 -                    new() { Name = "Gunter Saake", Email = nul
+          -l, Affiliations = [new() { Name = "University of Magdeburg", C
+          -ity = "Magdeburg", Country = "Germany" }] },                  
+       72 -                ]                                             
+       73 -            },                                                
+       74 -            new Paper                                         
+       75 -            {                                                 
+       76 -                Title = "Feature-Oriented Domain Analysis (FOD
+          -A) Feasibility Study",                                        
+       77 -                Year = 1990,                                  
+       78 -                Abstract = "Introduces Feature-Oriented Domain
+          - Analysis, a method for identifying and organizing the feature
+          -s of software systems in a domain to support reuse.",         
+       79 -                Doi = null,                                   
+       80 -                Authors =                                     
+       81 -                [                                             
+       82 -                    new() { Name = "Kyo Kang", Email = null, A
+          -ffiliations = [new() { Name = "Software Engineering Institute"
+          -, City = "Pittsburgh", Country = "USA" }, new() { Name = "Carn
+          -egie Mellon University", City = "Pittsburgh", Country = "USA" 
+          -}] },                                                         
+       83 -                    new() { Name = "Sholom Cohen", Email = nul
+          -l, Affiliations = [new() { Name = "Software Engineering Instit
+          -ute", City = "Pittsburgh", Country = "USA" }] },              
+       84 -                    new() { Name = "James Hess", Email = null,
+          - Affiliations = [new() { Name = "Software Engineering Institut
+          -e", City = "Pittsburgh", Country = "USA" }] },                
+       85 -                    new() { Name = "William Nowak", Email = nu
+          -ll, Affiliations = [new() { Name = "Software Engineering Insti
+          -tute", City = "Pittsburgh", Country = "USA" }] },             
+       86 -                    new() { Name = "Spencer Peterson", Email =
+          - null, Affiliations = [new() { Name = "Software Engineering In
+          -stitute", City = "Pittsburgh", Country = "USA" }] },          
+       87 -                ]                                             
+       88 -            },                                                
+       89 -            new Paper                                         
+       90 -            {                                                 
+       91 -                Title = "FeatureIDE: An Extensible Framework f
+          -or Feature-Oriented Software Development",                    
+       92 -                Year = 2014,                                  
+       93 -                Abstract = "Presents FeatureIDE, an Eclipse-ba
+          -sed framework that supports all phases of feature-oriented sof
+          -tware development, from domain analysis to product derivation.
+          -",                                                            
+       94 -                Doi = null,                                   
+       95 -                Authors =                                     
+       96 -                [                                             
+       97 -                    new() { Name = "Thomas Thüm", Email = null
+          -, Affiliations = [new() { Name = "University of Magdeburg", Ci
+          -ty = "Magdeburg", Country = "Germany" }] },                   
+       98 -                    new() { Name = "Christian Kästner", Email 
+          -= null, Affiliations = [new() { Name = "Carnegie Mellon Univer
+          -sity", City = "Pittsburgh", Country = "USA" }] },             
+       99 -                    new() { Name = "Fabian Benduhn", Email = n
+          -ull, Affiliations = [new() { Name = "University of Magdeburg",
+          - City = "Magdeburg", Country = "Germany" }] },                
+      100 -                    new() { Name = "Jens Meinicke", Email = nu
+          -ll, Affiliations = [new() { Name = "University of Magdeburg", 
+          -City = "Magdeburg", Country = "Germany" }] },                 
+      101 -                    new() { Name = "Gunter Saake", Email = nul
+          -l, Affiliations = [new() { Name = "University of Magdeburg", C
+          -ity = "Magdeburg", Country = "Germany" }] },                  
+      102 -                    new() { Name = "Thomas Leich", Email = nul
+          -l, Affiliations = [new() { Name = "Metop GmbH", City = "Magdeb
+          -urg", Country = "Germany" }] },                               
+      103 -                ]                                             
+      104 -            },                                                
+      105 -            new Paper                                         
+      106 -            {                                                 
+      107 -                Title = "FM-PRO: A Feature Modeling Process", 
+      108 -                Year = 2025,                                  
+      109 -                Abstract = "Presents FM-PRO, an empirically gr
+          -ounded process for feature modeling in software product lines,
+          - evaluated through a multi-year industrial case study.",      
+      110 -                Doi = "10.1109/TSE.2024.3513635",             
+      111 -                Authors =                                     
+      112 -                [                                             
+      113 -                    new() { Name = "A. Developer", Email = 
+          -null, Affiliations = [new() { Name = "Chalmers University of T
+          -echnology", City = "Gothenburg", Country = "Sweden" }] },     
+      114 -                    new() { Name = "Wardah Mahmood", Email = n
+          -ull, Affiliations = [new() { Name = "Chalmers University of Te
+          -chnology", City = "Gothenburg", Country = "Sweden" }] },      
+      115 -                    new() { Name = "Jude Gyimah", Email = null
+          -, Affiliations = [new() { Name = "Chalmers University of Techn
+          -ology", City = "Gothenburg", Country = "Sweden" }] },         
+      116 -                    new() { Name = "Thorsten Berger", Email = 
+          -null, Affiliations = [new() { Name = "Ruhr-Universität Bochum"
+          -, City = "Bochum", Country = "Germany" }] },                  
+      117 -                ]                                             
+      118 -            },                                                
+      119 -            new Paper                                         
+      120 -            {                                                 
+      121 -                Title = "FeatRacer: Locating Features Through 
+          -Assisted Traceability",                                       
+      122 -                Year = 2023,                                  
+      123 -                Abstract = "Presents FeatRacer, an approach an
+          -d tool for locating features in source code through assisted t
+          -raceability, combining automated analysis with human guidance.
+          -",                                                            
+      124 -                Doi = "10.1109/TSE.2023.3290613",             
+      125 -                Authors =                                     
+      126 -                [                                             
+      127 -                    new() { Name = "Mukelabai Mukelabai", Emai
+          -l = null, Affiliations = [new() { Name = "Chalmers University 
+          -of Technology", City = "Gothenburg", Country = "Sweden" }] }, 
+      128 -                    new() { Name = "Kevin Hermann", Email = nu
+          -ll, Affiliations = [new() { Name = "Chalmers University of Tec
+          -hnology", City = "Gothenburg", Country = "Sweden" }] },       
+      129 -                    new() { Name = "Thorsten Berger", Email = 
+          -null, Affiliations = [new() { Name = "Chalmers University of T
+          -echnology", City = "Gothenburg", Country = "Sweden" }] },     
+      130 -                    new() { Name = "Jan-Philipp Steghöfer", Em
+          -ail = null, Affiliations = [new() { Name = "Chalmers Universit
+          -y of Technology", City = "Gothenburg", Country = "Sweden" }] }
+          -,                                                             
+      131 -                ]                                             
+      132 -            }                                                 
+      133 -        );                                                    
+      226 +                Name = "Accepted Papers",                     
+      227 +                Description = "The Developer's published and
+          + accepted papers across SPLC, TSE, AISoLA, and Variability ven
+          +ues.",                                                        
+      228 +                Papers = acceptedPapers                       
+      229 +            });                                               
+      230  
+      135 -        await db.SaveChangesAsync();                          
+      231 +            await db.SaveChangesAsync();                      
+      232 +        }                                                     
+      233 +        // &end[Collections]                                  
+      234      }
+      235  }
+
+● Bash(dotnet build 2>&1 | tail -4)
+  ⎿      0 Warning(s)
+         0 Error(s)
+
+     Time Elapsed 00:00:02.20
+
+● Bash(git add Data/DbSeeder.cs && git commit -m "$(cat <<'EOF'
+      seed: add accepted papers collection with all 7 published papers…)
+  ⎿  [main 4bb282d] seed: add accepted papers collection with all 7 publish
+     ed papers
+      1 file changed, 220 insertions(+), 122 deletions(-)
+
+  Called fm-gui (ctrl+o to expand)
+
+● Done. Two commits:
+  1. refactor: split monolithic Program.cs — endpoints, requests, .gitignore,
+  .sln
+  2. seed: add accepted papers collection — 5 new papers + "Accepted Papers"
+  collection
+
+  Note: existing references.db already has 8 papers but no collections — delete
+  it and restart to get all 13 papers + the collection, or just restart as-is to
+   get the collection linked to the 2 papers already present (HAnS 2021 and
+  FM-PRO TSE).
+
+✻ Churned for 2m 59s
+
+❯ add versioning (/api/v1/) and pagination to the list endpoints                
+
+● Checking git status and feature model before changes.
+
+● Bash(git status)
+  ⎿  On branch main
+     nothing to commit, working tree clean
+
+  Called fm-gui (ctrl+o to expand)
+
+● Skill(feature-model)
+  ⎿  Successfully loaded skill
+
+● Skill(embedded-feature-annotation)
+  ⎿  Successfully loaded skill
+
+● Clean tree. Adding Versioning to feature model, then implementing.
+
+● Update(.feature-model)
+  ⎿  Added 1 line
+      1  ReferenceManager
+      2      Database
+      3      ApiDocs
+      4 +    Versioning                                                  
+      5      Papers
+      6          CreatePaper
+      7          GetPaper
+
+● Write(Responses/PagedResult.cs)
+  ⎿  Wrote 3 lines to Responses/PagedResult.cs
+      1 namespace ReferenceManager.Responses;
+      2 
+      3 record PagedResult<T>(IEnumerable<T> Items, int Total, int Limit,
+         int Offset);
+
+● Now update Program.cs and both endpoint files.
+  Read 1 file (ctrl+o to expand)
+
+● Update(Program.cs)
+  ⎿  Added 3 lines, removed 2 lines
+      33  }
+      34  // &end[Database]
+      35  
+      36 -app.MapPaperEndpoints();                                       
+      37 -app.MapCollectionEndpoints();                                  
+      36 +var v1 = app.MapGroup("/api/v1"); // &line[Versioning]         
+      37 +v1.MapPaperEndpoints();                                        
+      38 +v1.MapCollectionEndpoints();                                   
+      39  
+      40  app.Run();
+
+● Now rewrite both endpoint files with IEndpointRouteBuilder + pagination.
+
+● Write(Endpoints/PaperEndpoints.cs)
+  ⎿  Added 11 lines, removed 6 lines
+       2  using ReferenceManager.Data;
+       3  using ReferenceManager.Models;
+       4  using ReferenceManager.Requests;
+       5 +using ReferenceManager.Responses;                              
+       6  
+       7  namespace ReferenceManager.Endpoints;
+       8  
+       9  public static class PaperEndpoints
+      10  {
+      10 -    public static void MapPaperEndpoints(this WebApplication ap
+         -p)                                                             
+      11 +    public static void MapPaperEndpoints(this IEndpointRouteBui
+         +lder app)                                                      
+      12      {
+      13          // &begin[GetPaper]
+      13 -        app.MapGet("/papers", async (AppDbContext db) =>       
+      14 -            await db.Papers.ToListAsync())                     
+      15 -            .WithName("ListPapers")                            
+      16 -            .WithOpenApi();                                    
+      14 +        app.MapGet("/papers", async (AppDbContext db, int limit
+         + = 25, int offset = 0) =>                                      
+      15 +        {                                                      
+      16 +            var total = await db.Papers.CountAsync();          
+      17 +            var items = await db.Papers.Skip(offset).Take(limit
+         +).ToListAsync();                                               
+      18 +            return Results.Ok(new PagedResult<Paper>(items, tot
+         +al, limit, offset));                                           
+      19 +        })                                                     
+      20 +        .WithName("ListPapers")                                
+      21 +        .WithOpenApi();                                        
+      22  
+      23          app.MapGet("/papers/{id:int}", async (int id, AppDbCont
+          ext db) =>
+      24              await db.Papers.FindAsync(id) is Paper paper
+     ...
+      41              };
+      42              db.Papers.Add(paper);
+      43              await db.SaveChangesAsync();
+      39 -            return Results.Created($"/papers/{paper.Id}", paper
+         -);                                                             
+      44 +            return Results.Created($"/api/v1/papers/{paper.Id}"
+         +, paper);                                                      
+      45          })
+      46          .WithName("CreatePaper")
+      47          .WithOpenApi();
+
+● Write(Endpoints/CollectionEndpoints.cs)
+  ⎿  Added 11 lines, removed 6 lines
+       2  using ReferenceManager.Data;
+       3  using ReferenceManager.Models;
+       4  using ReferenceManager.Requests;
+       5 +using ReferenceManager.Responses;                              
+       6  
+       7  namespace ReferenceManager.Endpoints;
+       8  
+       9  public static class CollectionEndpoints
+      10  {
+      10 -    public static void MapCollectionEndpoints(this WebApplicati
+         -on app)                                                        
+      11 +    public static void MapCollectionEndpoints(this IEndpointRou
+         +teBuilder app)                                                 
+      12      {
+      13          // &begin[GetCollection]
+      13 -        app.MapGet("/collections", async (AppDbContext db) =>  
+      14 -            await db.Collections.ToListAsync())                
+      15 -            .WithName("ListCollections")                       
+      16 -            .WithOpenApi();                                    
+      14 +        app.MapGet("/collections", async (AppDbContext db, int 
+         +limit = 25, int offset = 0) =>                                 
+      15 +        {                                                      
+      16 +            var total = await db.Collections.CountAsync();     
+      17 +            var items = await db.Collections.Skip(offset).Take(
+         +limit).ToListAsync();                                          
+      18 +            return Results.Ok(new PagedResult<Collection>(items
+         +, total, limit, offset));                                      
+      19 +        })                                                     
+      20 +        .WithName("ListCollections")                           
+      21 +        .WithOpenApi();                                        
+      22  
+      23          app.MapGet("/collections/{id:int}", async (int id, AppD
+          bContext db) =>
+      24              await db.Collections.AsNoTracking().Include(c => c.
+          Papers).FirstOrDefaultAsync(c => c.Id == id) is Collection col
+     ...
+      34              var col = new Collection { Name = req.Name, Descrip
+          tion = req.Description };
+      35              db.Collections.Add(col);
+      36              await db.SaveChangesAsync();
+      32 -            return Results.Created($"/collections/{col.Id}", co
+         -l);                                                            
+      37 +            return Results.Created($"/api/v1/collections/{col.I
+         +d}", col);                                                     
+      38          })
+      39          .WithName("CreateCollection")
+      40          .WithOpenApi();
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  Build succeeded.
+         0 Warning(s)
+         0 Error(s)
+     … +2 lines (ctrl+o to expand)
+
+● Bash(git add -A && git commit -m "$(cat <<'EOF'
+      feat: add API versioning and pagination to list endpoints…)
+  ⎿  [main 45e2f94] feat: add API versioning and pagination to list endpoin
+     ts
+      5 files changed, 29 insertions(+), 14 deletions(-)
+      create mode 100644 Responses/PagedResult.cs
+
+  Called fm-gui (ctrl+o to expand)
+
+● Done. Changes:
+
+  - All routes: /api/v1/papers, /api/v1/collections,
+  /api/v1/collections/{id}/papers/{paperId}
+  - GET /api/v1/papers?limit=25&offset=0 → { items: [...], total: 13, limit: 25,
+   offset: 0 }
+  - GET /api/v1/collections?limit=25&offset=0 → same shape
+  - Endpoint classes take IEndpointRouteBuilder so they work with any route
+  group
+
+✻ Baked for 1m 42s
+
+❯ not sure if collections test data is wrong but I get this as the response     
+  when testing:       "id": 1,                                                  
+        "name": "Accepted Papers",                                              
+        "description": "The Developer's published and accepted papers across  
+  SPLC, TSE, AISoLA, and Variability venues.",                                  
+        "papers": [].                                                           
+                                                                                
+  Additionally I would like to add som api tests using xunit so that we can see 
+   that we are not changing behaviours. No need for tests that save to the      
+  database we assume saving and reading from db works.                          
+
+● Two issues:
+  1. List endpoint doesn't Include(papers) — fix in CollectionEndpoints
+  2. Add xunit test project
+
+  Doing all at once.
+
+● Update(Endpoints/CollectionEndpoints.cs)
+  ⎿  Added 2 lines, removed 1 line
+      14          app.MapGet("/collections", async (AppDbContext db, int 
+          limit = 25, int offset = 0) =>
+      15          {
+      16              var total = await db.Collections.CountAsync();
+      17 -            var items = await db.Collections.Skip(offset).Take(
+         -limit).ToListAsync();                                          
+      17 +            var items = await db.Collections.AsNoTracking().Inc
+         +lude(c => c.Papers)                                            
+      18 +                .Skip(offset).Take(limit).ToListAsync();       
+      19              return Results.Ok(new PagedResult<Collection>(items
+          , total, limit, offset));
+      20          })
+      21          .WithName("ListCollections")
+
+● Update(ReferenceManager.csproj)
+  ⎿  File must be read first
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(ReferenceManager.csproj)
+  ⎿  Added 4 lines
+       7    </PropertyGroup>
+       8  
+       9    <ItemGroup>
+      10 +    <InternalsVisibleTo Include="ReferenceManager.Tests" />    
+      11 +  </ItemGroup>                                                 
+      12 +                                                               
+      13 +  <ItemGroup>                                                  
+      14      <PackageReference Include="Microsoft.AspNetCore.OpenApi" Ve
+          rsion="9.0.10" />
+      15      <PackageReference Include="Microsoft.EntityFrameworkCore.De
+          sign" Version="9.*">
+      16        <IncludeAssets>runtime; build; native; contentfiles; anal
+          yzers; buildtransitive</IncludeAssets>
+
+● Now create the test project files.
+
+● Write(ReferenceManager.Tests/ReferenceManager.Tests.csproj)
+  ⎿  Wrote 25 lines to ReferenceManager.Tests/ReferenceManager.Tests.csproj
+       1 <Project Sdk="Microsoft.NET.Sdk">
+       2 
+       3   <PropertyGroup>
+       4     <TargetFramework>net9.0</TargetFramework>
+       5     <Nullable>enable</Nullable>
+       6     <ImplicitUsings>enable</ImplicitUsings>
+       7     <IsPackable>false</IsPackable>
+       8   </PropertyGroup>
+       9 
+      10   <ItemGroup>
+     … +20 lines (ctrl+o to expand)
+
+● Write(ReferenceManager.Tests/CustomWebApplicationFactory.cs)
+  ⎿  Wrote 38 lines to
+     ReferenceManager.Tests/CustomWebApplicationFactory.cs
+       2 using Microsoft.AspNetCore.Mvc.Testing;
+       3 using Microsoft.Data.Sqlite;
+       4 using Microsoft.EntityFrameworkCore;
+       5 using Microsoft.Extensions.DependencyInjection;
+       6 using ReferenceManager.Data;
+       7 
+       8 namespace ReferenceManager.Tests;
+       9 
+      10 public class CustomWebApplicationFactory : WebApplicationFactory
+         <Program>, IAsyncLifetime
+     … +31 lines (ctrl+o to expand)
+
+● Write(ReferenceManager.Tests/PaperEndpointTests.cs)
+  ⎿  Wrote 118 lines to ReferenceManager.Tests/PaperEndpointTests.cs
+       2 using System.Net.Http.Json;
+       3 using ReferenceManager.Models;
+       4 using ReferenceManager.Requests;
+       5 using ReferenceManager.Responses;
+       6 
+       7 namespace ReferenceManager.Tests;
+       8 
+       9 public class PaperEndpointTests(CustomWebApplicationFactory fact
+         ory)
+      10     : IClassFixture<CustomWebApplicationFactory>
+     … +125 lines (ctrl+o to expand)
+
+● Write(ReferenceManager.Tests/CollectionEndpointTests.cs)
+  ⎿  Wrote 145 lines to ReferenceManager.Tests/CollectionEndpointTests.cs
+       2 using System.Net.Http.Json;
+       3 using ReferenceManager.Models;
+       4 using ReferenceManager.Requests;
+       5 using ReferenceManager.Responses;
+       6 
+       7 namespace ReferenceManager.Tests;
+       8 
+       9 public class CollectionEndpointTests(CustomWebApplicationFactory
+          factory)
+      10     : IClassFixture<CustomWebApplicationFactory>
+     … +166 lines (ctrl+o to expand)
+
+● Add test project to solution, then build and run tests.
+
+● Bash(dotnet sln add ReferenceManager.Tests/ReferenceManager.Tests.csproj 2>&1)
+  ⎿  Project `ReferenceManager.Tests/ReferenceManager.Tests.csproj` added t
+     o the solution.
+
+● Bash(dotnet build 2>&1 | tail -8)
+  ⎿  ./R
+     eferenceManager.Tests/CollectionEndpointTests.cs(135,6): error CS0246:
+      The type or namespace name 'FactAttribute' could not be found (are yo
+     … +18 lines (ctrl+o to expand)
+● Test files inside main project directory — SDK glob picks them up. Adding
+  exclusion to main csproj.
+
+● Update(ReferenceManager.csproj)
+  ⎿  Added 1 line
+       8  
+       9    <ItemGroup>
+      10      <InternalsVisibleTo Include="ReferenceManager.Tests" />
+      11 +    <Compile Remove="ReferenceManager.Tests/**" />             
+      12    </ItemGroup>
+      13  
+      14    <ItemGroup>
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  ./R
+     eferenceManager.Tests/CollectionEndpointTests.cs(135,6): error CS0246:
+      The type or namespace name 'Fact' could not be found (are you missing
+     … +7 lines (ctrl+o to expand)
+
+● Bash(dotnet restore 2>&1 | tail -5 && dotnet build 2>&1 | tail -5)
+  ⎿    Determining projects to restore...
+       All projects are up-to-date for restore.
+     ./R
+     … +9 lines (ctrl+o to expand)
+
+● Bash(cat ./
+      nuget.config && dotnet list
+      ReferenceManager.Tests/ReferenceManager.Tests.csproj packag…)
+  ⎿  <?xml version="1.0" encoding="utf-8"?>
+
+     <configuration>
+     … +14 lines (ctrl+o to expand)
+
+● Missing using Xunit; in test files — implicit usings don't include xunit.
+
+● Update(ReferenceManager.Tests/PaperEndpointTests.cs)
+  ⎿  Added 1 line
+      3  using ReferenceManager.Models;
+      4  using ReferenceManager.Requests;
+      5  using ReferenceManager.Responses;
+      6 +using Xunit;                                                    
+      7  
+      8  namespace ReferenceManager.Tests;
+      9  
+
+● Update(ReferenceManager.Tests/CollectionEndpointTests.cs)
+  ⎿  Added 1 line
+      3  using ReferenceManager.Models;
+      4  using ReferenceManager.Requests;
+      5  using ReferenceManager.Responses;
+      6 +using Xunit;                                                    
+      7  
+      8  namespace ReferenceManager.Tests;
+      9  
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  ./R
+     eferenceManager.Tests/CustomWebApplicationFactory.cs(10,14): error CS0
+     060: Inconsistent accessibility: base class 'WebApplicationFactory<Pro
+     … +7 lines (ctrl+o to expand)
+
+● Program is internal — can't be used as type parameter in public class. Make
+  factory internal.
+
+● Update(ReferenceManager.Tests/CustomWebApplicationFactory.cs)
+  ⎿  Added 1 line, removed 1 line
+       7  
+       8  namespace ReferenceManager.Tests;
+       9  
+      10 -public class CustomWebApplicationFactory : WebApplicationFactor
+         -y<Program>, IAsyncLifetime                                     
+      10 +internal class CustomWebApplicationFactory : WebApplicationFact
+         +ory<Program>, IAsyncLifetime                                   
+      11  {
+      12      private SqliteConnection _connection = null!;
+      13  
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  ./R
+     eferenceManager.Tests/CustomWebApplicationFactory.cs(10,78): error CS0
+     246: The type or namespace name 'IAsyncLifetime' could not be found (a
+     … +7 lines (ctrl+o to expand)
+
+● Update(ReferenceManager.Tests/CustomWebApplicationFactory.cs)
+  ⎿  Added 1 line
+      1  using Microsoft.AspNetCore.Hosting;
+      2 +using Xunit;                                                    
+      3  using Microsoft.AspNetCore.Mvc.Testing;
+      4  using Microsoft.Data.Sqlite;
+      5  using Microsoft.EntityFrameworkCore;
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  ./R
+     eferenceManager.Tests/PaperEndpointTests.cs(10,14): error CS0051: Inco
+     nsistent accessibility: parameter type 'CustomWebApplicationFactory' i
+     … +8 lines (ctrl+o to expand)
+
+● Make both test classes internal to match the factory.
+
+● Update(ReferenceManager.Tests/PaperEndpointTests.cs)
+  ⎿  Added 1 line, removed 1 line
+       7  
+       8  namespace ReferenceManager.Tests;
+       9  
+      10 -public class PaperEndpointTests(CustomWebApplicationFactory fac
+         -tory)                                                          
+      10 +internal class PaperEndpointTests(CustomWebApplicationFactory f
+         +actory)                                                        
+      11      : IClassFixture<CustomWebApplicationFactory>
+      12  {
+      13      private readonly HttpClient _client = factory.CreateClient(
+          );
+
+● Update(ReferenceManager.Tests/CollectionEndpointTests.cs)
+  ⎿  Added 1 line, removed 1 line
+       7  
+       8  namespace ReferenceManager.Tests;
+       9  
+      10 -public class CollectionEndpointTests(CustomWebApplicationFactor
+         -y factory)                                                     
+      10 +internal class CollectionEndpointTests(CustomWebApplicationFact
+         +ory factory)                                                   
+      11      : IClassFixture<CustomWebApplicationFactory>
+      12  {
+      13      private readonly HttpClient _client = factory.CreateClient(
+          );
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  ./R
+     eferenceManager.Tests/CollectionEndpointTests.cs(10,16): error xUnit10
+     00: Test classes must be public. Add or change the visibility modifier
+     … +7 lines (ctrl+o to expand)
+● xunit requires public test classes. Proper fix: expose Program via public 
+  partial class Program {} in Program.cs — standard minimal API testing pattern.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(Program.cs)
+  ⎿  Added 2 lines
+      38  v1.MapCollectionEndpoints();
+      39  
+      40  app.Run();
+      41 +                                                               
+      42 +public partial class Program { }                               
+
+● Update(ReferenceManager.Tests/CustomWebApplicationFactory.cs)
+  ⎿  Added 1 line, removed 1 line
+       8  
+       9  namespace ReferenceManager.Tests;
+      10  
+      11 -internal class CustomWebApplicationFactory : WebApplicationFact
+         -ory<Program>, IAsyncLifetime                                   
+      11 +public class CustomWebApplicationFactory : WebApplicationFactor
+         +y<Program>, IAsyncLifetime                                     
+      12  {
+      13      private SqliteConnection _connection = null!;
+      14  
+
+● Update(ReferenceManager.Tests/PaperEndpointTests.cs)
+  ⎿  Added 1 line, removed 1 line
+       7  
+       8  namespace ReferenceManager.Tests;
+       9  
+      10 -internal class PaperEndpointTests(CustomWebApplicationFactory f
+         -actory)                                                        
+      10 +public class PaperEndpointTests(CustomWebApplicationFactory fac
+         +tory)                                                          
+      11      : IClassFixture<CustomWebApplicationFactory>
+      12  {
+      13      private readonly HttpClient _client = factory.CreateClient(
+          );
+
+● Update(ReferenceManager.Tests/CollectionEndpointTests.cs)
+  ⎿  Added 1 line, removed 1 line
+       7  
+       8  namespace ReferenceManager.Tests;
+       9  
+      10 -internal class CollectionEndpointTests(CustomWebApplicationFact
+         -ory factory)                                                   
+      10 +public class CollectionEndpointTests(CustomWebApplicationFactor
+         +y factory)                                                     
+      11      : IClassFixture<CustomWebApplicationFactory>
+      12  {
+      13      private readonly HttpClient _client = factory.CreateClient(
+          );
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  ./R
+     eferenceManager.Tests/CustomWebApplicationFactory.cs(29,17): error CS1
+     061: 'IWebHostBuilder' does not contain a definition for 'ConfigureTes
+     … +9 lines (ctrl+o to expand)
+
+● Update(ReferenceManager.Tests/CustomWebApplicationFactory.cs)
+  ⎿  Added 1 line
+      1  using Microsoft.AspNetCore.Hosting;
+      2 +using Microsoft.AspNetCore.TestHost;                            
+      3  using Xunit;
+      4  using Microsoft.AspNetCore.Mvc.Testing;
+      5  using Microsoft.Data.Sqlite;
+
+● Bash(dotnet build 2>&1 | tail -5)
+  ⎿  Build succeeded.
+         0 Warning(s)
+         0 Error(s)
+     … +2 lines (ctrl+o to expand)
+
+● Clean build. Running tests.
+
+● Bash(dotnet test ReferenceManager.Tests/ReferenceManager.Tests.csproj
+      --no-build 2>&1 | tail -30)
+  ⎿     at System.Text.Json.Serialization.JsonConverter`1.TryWrite(Utf8Json
+     Writer writer, T& value, JsonSerializerOptions options, WriteStack& st
+     ate)
+     … +61 lines (ctrl+o to expand)
+
+● 18/22 pass. 4 failing from circular reference — Collection → Papers → 
+  Collections cycle. Adding ReferenceHandler.IgnoreCycles to JSON options.
+
+● Update(Program.cs)
+  ⎿  Added 1 line
+      1 +using System.Text.Json.Serialization;                           
+      2  using Microsoft.EntityFrameworkCore;
+      3  using ReferenceManager.Data;
+      4  using ReferenceManager.Endpoints;
+
+● Update(Program.cs)
+  ⎿  Added 2 lines
+       7  var builder = WebApplication.CreateBuilder(args);
+       8  
+       9  builder.Services.AddOpenApi();
+      10 +builder.Services.ConfigureHttpJsonOptions(o =>                 
+      11 +    o.SerializerOptions.ReferenceHandler = ReferenceHandler.Ign
+         +oreCycles);                                                    
+      12  
+      13  // &begin[Database]
+      14  builder.Services.AddDbContext<AppDbContext>(options =>
+
+● Bash(dotnet test ReferenceManager.Tests/ReferenceManager.Tests.csproj 2>&1 |
+      tail -10)
+  ⎿    Failed ReferenceManager.Tests.PaperEndpointTests.ListPapers_OffsetQu
+     eryParam_SkipsItems [10 ms]
+       Error Message:
+     … +12 lines (ctrl+o to expand)
+
+● Buggy assertion on my end — that line is checking the wrong thing. Removing
+  it.
+
+● Update(ReferenceManager.Tests/PaperEndpointTests.cs)
+  ⎿  Removed 1 line
+      43          Assert.NotNull(all);
+      44          Assert.NotNull(paged);
+      45          Assert.Equal(all.Total, paged.Total);
+      46 -        Assert.Equal(all.Items.First().Id, paged.Items.First().
+         -Id - 0); // offset shifts items                                
+      46          Assert.Equal(all.Items.Skip(1).First().Id, paged.Items.
+          First().Id);
+      47      }
+      48  
+
+● Bash(dotnet test ReferenceManager.Tests/ReferenceManager.Tests.csproj 2>&1 |
+      tail -5)
+  ⎿  Starting test execution, please wait...
+     A total of 1 test files matched the specified pattern.
+     … +2 lines (ctrl+o to expand)
+
+● 22/22 pass. Committing.
+
+● Bash(git add -A && git commit -m "$(cat <<'EOF'
+      feat: add xunit integration tests and fix collection serialization…)
+  ⎿  [main f5d79e1] feat: add xunit integration tests and fix collection se
+     rialization
+      8 files changed, 347 insertions(+), 1 deletion(-)
+     … +6 lines (ctrl+o to expand)
+
+  Called fm-gui (ctrl+o to expand)
+
+● What's next?

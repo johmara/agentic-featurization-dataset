@@ -1,0 +1,1432 @@
+╭─── Claude Code v2.1.119 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back Developer!                │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ Recent activity         │
+│                        ▘▘ ▝▝                       │ No recent activity      │
+│                                                    │                         │
+│           Sonnet 4.6 · Claude Enterprise           │                         │
+│ /…/greta-demo/ReferenceManager │                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+  New to Claude Code? Start with /help, review the CLAUDE.md in your repository, and install relevant plugins for your role from the [The Company] marketplace via /plugin.
+
+❯ /clear
+  ⎿  (no content)
+
+❯ The current Author model is embedded in Papers which causes duplication — the
+   same author appears many times with slightly different spellings. Refactor
+  Authors into standalone managed entities with their own CRUD endpoints.
+  Papers should reference Authors by ID. Add logic that checks for an existing
+  author by name before creating a new one to prevent duplicates. Migrate
+  existing data.
+
+● Using the feature model workflow.
+
+  Starting with git status and feature model retrieval.
+
+● Bash(git status)
+  ⎿  On branch main
+     Changes not staged for commit:
+       (use "git add <file>..." to update what will be committed)
+     … +13 lines (ctrl+o to expand)
+
+● Uncommitted changes exist. Want to commit before proceeding?
+
+  Modified: .feature-model, Endpoints/PaperEndpoints.cs,
+  ReferenceManager.Tests/PaperEndpointTests.cs, Requests/PaperRequests.cs,
+  Services/.feature-to-file
+  Untracked: Services/BibtexSerializer.cs
+
+❯ yes
+
+● Bash(git diff && git diff --cached)
+  ⎿  diff --git a/.feature-model b/.feature-model
+     index d92e1fd..199b2e1 100644
+     --- a/.feature-model
+     … +62 lines (ctrl+o to expand)
+
+● Bash(git log --oneline -5)
+  ⎿  c95899b feat: add BibTeX import endpoint with dedup and journal/bookti
+     tle fields
+     4604f7c feat: merge Tags and Collections into unified Groups model
+     … +4 lines (ctrl+o to expand)
+
+● Bash(git add .feature-model Endpoints/PaperEndpoints.cs
+      ReferenceManager.Tests/PaperEndpointTests.cs Requests/PaperRequests.cs
+      Services/.feature-to-file Services/Bib…)
+  ⎿  [main 10b9c42] feat: add BibTeX export endpoint with journal/booktitle
+      fields
+      6 files changed, 115 insertions(+), 5 deletions(-)
+      create mode 100644 Services/BibtexSerializer.cs
+
+● Now reading feature model and loading skills.
+
+  Called fm-gui (ctrl+o to expand)
+
+● Skill(feature-model)
+  ⎿  Successfully loaded skill
+
+● Skill(embedded-feature-annotation)
+  ⎿  Successfully loaded skill
+
+● Both skills loaded. Now exploring codebase.
+
+  Searched for 1 pattern, read 9 files (ctrl+o to expand)
+
+● Good picture of the codebase. Let me check the latest migration snapshot
+  before planning.
+
+  Read 2 files (ctrl+o to expand)
+
+● Full picture. Plan:
+  - Author → standalone entity, Id, many-to-many with Paper
+  - New AuthorEndpoints with CRUD
+  - GetOrCreate by name in CreatePaper/UpdatePaper/ImportBibtex
+  - EF migration with data migration SQL (extract JSON → Authors table)
+  - Feature model: add Authors subtree
+
+  Let me implement.
+
+● Update(Models/Author.cs)
+  ⎿  Added 4 lines
+       1  namespace ReferenceManager.Models;
+       2
+       3 +// &begin[Authors]
+       4  public class Author
+       5  {
+       6 +    public int Id { get; set; }
+       7      public string Name { get; set; } = string.Empty;
+       8      public string? Email { get; set; }
+       9      public List<Affiliation> Affiliations { get; set; } = [];
+      10 +    public List<Paper> Papers { get; set; } = [];
+      11  }
+      12 +// &end[Authors]
+
+● Update(Models/Paper.cs)
+  ⎿  Added 1 line, removed 1 line
+       4  {
+       5      public int Id { get; set; }
+       6      public string Title { get; set; } = string.Empty;
+       7 -    public List<Author> Authors { get; set; } = [];
+       7 +    public List<Author> Authors { get; set; } = []; // &line[Au
+         +thors]
+       8      public int Year { get; set; }
+       9      public string? Abstract { get; set; }
+      10      public string? Doi { get; set; }
+● Write(Data/AppDbContext.cs)
+  ⎿  Added 10 lines, removed 5 lines
+       7  {
+       8      public DbSet<Paper> Papers => Set<Paper>();
+       9      public DbSet<Group> Groups => Set<Group>(); // &line[Groups
+          ]
+      10 +    public DbSet<Author> Authors => Set<Author>(); // &line[Aut
+         +hors]
+      11
+      12      protected override void OnModelCreating(ModelBuilder modelB
+          uilder)
+      13      {
+      13 -        modelBuilder.Entity<Paper>().OwnsMany(p => p.Authors, a
+         - =>
+      14 -        {
+      15 -            a.ToJson();
+      16 -            a.OwnsMany(x => x.Affiliations);
+      17 -        });
+      14 +        // &begin[Authors]
+      15 +        modelBuilder.Entity<Author>()
+      16 +            .OwnsMany(a => a.Affiliations, b => b.ToJson());
+      17
+      18 +        modelBuilder.Entity<Paper>()
+      19 +            .HasMany(p => p.Authors)
+      20 +            .WithMany(a => a.Papers)
+      21 +            .UsingEntity("PaperAuthor");
+      22 +        // &end[Authors]
+      23 +
+      24          // &begin[Groups]
+      25          modelBuilder.Entity<Group>()
+      26              .HasMany(g => g.Papers)
+
+● Now create Requests/AuthorRequests.cs and update PaperRequests.cs.
+
+● Write(Requests/AuthorRequests.cs)
+  ⎿  Wrote 6 lines to Requests/AuthorRequests.cs
+      1 namespace ReferenceManager.Requests;
+      2
+      3 // &begin[Authors]
+      4 record AffiliationRequest(string Name, string Country, string Cit
+        y);
+      5 record AuthorRequest(string Name, string? Email, List<Affiliation
+        Request> Affiliations);
+      6 // &end[Authors]
+
+● Write(Requests/PaperRequests.cs)
+  ⎿  Added 2 lines, removed 2 lines
+      1  namespace ReferenceManager.Requests;
+      2
+      3 -record AffiliationRequest(string Name, string Country, string Ci
+        -ty);
+      4 -record AuthorRequest(string Name, string? Email, List<Affiliatio
+        -nRequest> Affiliations);
+      3 +// &begin[Papers]
+      4  record PaperRequest(string Title, List<AuthorRequest> Authors, i
+         nt Year, string? Abstract, string? Doi, string? Journal, string?
+          Booktitle);
+      5 +// &end[Papers]
+
+● Now create AuthorEndpoints.cs with CRUD and GetOrCreateAsync helper.
+
+● Write(Endpoints/AuthorEndpoints.cs)
+  ⎿  Wrote 116 lines to Endpoints/AuthorEndpoints.cs
+       2 using ReferenceManager.Data;orkCore;
+       3 using ReferenceManager.Models;
+       4 using ReferenceManager.Requests;
+       5
+       6 namespace ReferenceManager.Endpoints;
+       7
+       8 public static class AuthorEndpoints
+       9 {
+      10     public static void MapAuthorEndpoints(this IEndpointRouteBui
+         lder app)
+     … +120 lines (ctrl+o to expand)
+
+● Now update PaperEndpoints.cs — use GetOrCreateAsync, add Include(Authors) to
+  queries, remove ToAuthor helper.
+
+● Write(Endpoints/PaperEndpoints.cs)
+  ⎿  Added 22 lines, removed 16 lines
+      15          app.MapGet("/papers", async (AppDbContext db, int limit
+           = 25, int offset = 0) =>
+      16          {
+      17              var total = await db.Papers.CountAsync();
+      18 -            var items = await db.Papers.Skip(offset).Take(limit
+         -).ToListAsync();
+      18 +            var items = await db.Papers.Include(p => p.Authors)
+      19 +                .Skip(offset).Take(limit).ToListAsync();
+      20              return Results.Ok(new PagedResult<Paper>(items, tot
+          al, limit, offset));
+      21          })
+      22          .WithName("ListPapers")
+      23          .WithOpenApi();
+      24
+      25          app.MapGet("/papers/{id:int}", async (int id, AppDbCont
+          ext db) =>
+      25 -            await db.Papers.FindAsync(id) is Paper paper
+      26 +            await db.Papers.Include(p => p.Authors).FirstOrDefa
+         +ultAsync(p => p.Id == id) is Paper paper
+      27                  ? Results.Ok(paper)
+      28                  : Results.NotFound())
+      29              .WithName("GetPaper")
+     ...
+      33          // &begin[CreatePaper]
+      34          app.MapPost("/papers", async (PaperRequest req, AppDbCo
+          ntext db) =>
+      35          {
+      36 +            var cache = new Dictionary<string, Author>();
+      37 +            var authors = new List<Author>();
+      38 +            foreach (var a in req.Authors)
+      39 +                authors.Add(await AuthorEndpoints.GetOrCreateAs
+         +ync(a.Name, a.Email, a.Affiliations, db, cache));
+      40 +
+      41              var paper = new Paper
+      42              {
+      43                  Title = req.Title,
+      38 -                Authors = req.Authors.Select(ToAuthor).ToList()
+         -,
+      44 +                Authors = authors,
+      45                  Year = req.Year,
+      46                  Abstract = req.Abstract,
+      47                  Doi = req.Doi,
+     ...
+      59          // &begin[UpdatePaper]
+      60          app.MapPut("/papers/{id:int}", async (int id, PaperRequ
+          est req, AppDbContext db) =>
+      61          {
+      56 -            var paper = await db.Papers.FindAsync(id);
+      62 +            var paper = await db.Papers.Include(p => p.Authors)
+         +.FirstOrDefaultAsync(p => p.Id == id);
+      63              if (paper is null) return Results.NotFound();
+      64
+      65 +            var cache = new Dictionary<string, Author>();
+      66 +            var authors = new List<Author>();
+      67 +            foreach (var a in req.Authors)
+      68 +                authors.Add(await AuthorEndpoints.GetOrCreateAs
+         +ync(a.Name, a.Email, a.Affiliations, db, cache));
+      69 +
+      70              paper.Title = req.Title;
+      60 -            paper.Authors = req.Authors.Select(ToAuthor).ToList
+         -();
+      71 +            paper.Authors = authors;
+      72              paper.Year = req.Year;
+      73              paper.Abstract = req.Abstract;
+      74              paper.Doi = req.Doi;
+     ...
+      105              int created = 0, skipped = 0;
+      106              var seenDois = new HashSet<string>(StringComparer.
+           OrdinalIgnoreCase);
+      107              var seenTitleAuthor = new HashSet<string>(StringCo
+           mparer.OrdinalIgnoreCase);
+      108 +            var authorCache = new Dictionary<string, Author>(S
+          +tringComparer.OrdinalIgnoreCase);
+      109              foreach (var entry in entries)
+      110              {
+      111                  if (!entry.Fields.TryGetValue("title", out var
+            title) || string.IsNullOrWhiteSpace(title))
+     ...
+      127                  var authorNames = (authorStr ?? string.Empty)
+      128                      .Split(" and ", StringSplitOptions.RemoveE
+           mptyEntries | StringSplitOptions.TrimEntries)
+      129                      .ToList();
+      118 -                var authors = authorNames.Select(name => new A
+          -uthor { Name = name }).ToList();
+      130
+      131                  if (normalizedDoi is null)
+      132                  {
+     ...
+      137                          continue;
+      138                      }
+      139                      var normalizedTitle = title.Trim().ToLower
+           Invariant();
+      129 -                    var candidates = await db.Papers
+      140 +                    var candidates = await db.Papers.Include(p
+          + => p.Authors)
+      141                          .Where(p => p.Doi == null && p.Title.T
+           oLower() == normalizedTitle)
+      142                          .ToListAsync();
+      143                      if (candidates.Any(p => TitleAuthorKey(p.T
+           itle, p.Authors.Select(a => a.Name)) == titleAuthorKey))
+     ...
+      153                  entry.Fields.TryGetValue("journal", out var jo
+           urnal);
+      154                  entry.Fields.TryGetValue("booktitle", out var
+           booktitle);
+      155
+      156 +                var authors = new List<Author>();
+      157 +                foreach (var name in authorNames)
+      158 +                    authors.Add(await AuthorEndpoints.GetOrCre
+          +ateAsync(name, null, [], db, authorCache));
+      159 +
+      160                  db.Papers.Add(new Paper
+      161                  {
+      162                      Title = title,
+     ...
+      203      private static string TitleAuthorKey(string title, IEnumer
+           able<string> authorNames) =>
+      204          title.Trim().ToLowerInvariant() + "||" +
+      205          string.Join("|", authorNames.Select(n => n.Trim().ToLo
+           werInvariant()).Order());
+      191 -
+      192 -    private static Author ToAuthor(AuthorRequest r) => new()
+      193 -    {
+      194 -        Name = r.Name,
+      195 -        Email = r.Email,
+      196 -        Affiliations = r.Affiliations
+      197 -            .Select(a => new Affiliation { Name = a.Name, Coun
+          -try = a.Country, City = a.City })
+      198 -            .ToList()
+      199 -    };
+      206  }
+
+● Now update DbSeeder.cs to use shared Author instances.
+
+● Write(Data/DbSeeder.cs)
+  ⎿  Added 54 lines, removed 95 lines
+       9      {
+      10          if (!await db.Papers.AnyAsync())
+      11          {
+      12 +            // &begin[Authors]
+      13 +            var chalmers = new Affiliation { Name = "Chalmers U
+         +niversity of Technology", City = "Gothenburg", Country = "Swede
+         +n" };
+      14 +            var rub = new Affiliation { Name = "Ruhr-Universitä
+         +t Bochum", City = "Bochum", Country = "Germany" };
+      15 +
+      16 +            var johan = new Author { Name = "A. Developer",
+         +Affiliations = [rub] };
+      17 +            var thorsten = new Author { Name = "Thorsten Berger
+         +", Affiliations = [rub] };
+      18 +            var mukelabai = new Author { Name = "Mukelabai Muke
+         +labai", Affiliations = [chalmers] };
+      19 +            var wardah = new Author { Name = "Wardah Mahmood",
+         +Affiliations = [chalmers] };
+      20 +            var herman = new Author { Name = "Herman Jansson",
+         +Affiliations = [chalmers] };
+      21 +            var alexandre = new Author { Name = "Alexandre Berg
+         +el", Affiliations = [new() { Name = "University of Chile", City
+         + = "Santiago", Country = "Chile" }] };
+      22 +            var truong = new Author { Name = "Truong Ho-Quang",
+         + Affiliations = [chalmers] };
+      23 +            var daniela = new Author { Name = "Daniela Lettner"
+         +, Affiliations = [new() { Name = "Johannes Kepler University Li
+         +nz", City = "Linz", Country = "Austria" }] };
+      24 +            var julia = new Author { Name = "Julia Rubin", Affi
+         +liations = [new() { Name = "University of British Columbia", Ci
+         +ty = "Vancouver", Country = "Canada" }] };
+      25 +            var paul = new Author { Name = "Paul Grünbacher", A
+         +ffiliations = [new() { Name = "Johannes Kepler University Linz"
+         +, City = "Linz", Country = "Austria" }] };
+      26 +            var adeline = new Author { Name = "Adeline Silva",
+         +Affiliations = [] };
+      27 +            var martin = new Author { Name = "Martin Becker", A
+         +ffiliations = [] };
+      28 +            var marsha = new Author { Name = "Marsha Chechik",
+         +Affiliations = [new() { Name = "University of Toronto", City =
+         +"Toronto", Country = "Canada" }] };
+      29 +            var krzysztof = new Author { Name = "Krzysztof Czar
+         +necki", Affiliations = [new() { Name = "University of Waterloo"
+         +, City = "Waterloo", Country = "Canada" }] };
+      30 +            var christian = new Author { Name = "Christian Käst
+         +ner", Affiliations = [new() { Name = "Carnegie Mellon Universit
+         +y", City = "Pittsburgh", Country = "USA" }] };
+      31 +            var alexander = new Author { Name = "Alexander Drei
+         +ling", Affiliations = [new() { Name = "Philipps-Universität Mar
+         +burg", City = "Marburg", Country = "Germany" }] };
+      32 +            var klaus = new Author { Name = "Klaus Ostermann",
+         +Affiliations = [new() { Name = "Philipps-Universität Marburg",
+         +City = "Marburg", Country = "Germany" }] };
+      33 +            var sven = new Author { Name = "Sven Apel", Affilia
+         +tions = [new() { Name = "University of Passau", City = "Passau"
+         +, Country = "Germany" }] };
+      34 +            var don = new Author { Name = "Don Batory", Affilia
+         +tions = [new() { Name = "University of Texas at Austin", City =
+         + "Austin", Country = "USA" }] };
+      35 +            var gunter = new Author { Name = "Gunter Saake", Af
+         +filiations = [new() { Name = "University of Magdeburg", City =
+         +"Magdeburg", Country = "Germany" }] };
+      36 +            var kyo = new Author { Name = "Kyo Kang", Affiliati
+         +ons = [new() { Name = "Software Engineering Institute", City =
+         +"Pittsburgh", Country = "USA" }] };
+      37 +            var sholom = new Author { Name = "Sholom Cohen", Af
+         +filiations = [new() { Name = "Software Engineering Institute",
+         +City = "Pittsburgh", Country = "USA" }] };
+      38 +            var james = new Author { Name = "James Hess", Affil
+         +iations = [new() { Name = "Software Engineering Institute", Cit
+         +y = "Pittsburgh", Country = "USA" }] };
+      39 +            var william = new Author { Name = "William Nowak",
+         +Affiliations = [new() { Name = "Software Engineering Institute"
+         +, City = "Pittsburgh", Country = "USA" }] };
+      40 +            var spencer = new Author { Name = "Spencer Peterson
+         +", Affiliations = [new() { Name = "Software Engineering Institu
+         +te", City = "Pittsburgh", Country = "USA" }] };
+      41 +            var thomas = new Author { Name = "Thomas Thüm", Aff
+         +iliations = [new() { Name = "University of Magdeburg", City = "
+         +Magdeburg", Country = "Germany" }] };
+      42 +            var fabian = new Author { Name = "Fabian Benduhn",
+         +Affiliations = [new() { Name = "University of Magdeburg", City
+         += "Magdeburg", Country = "Germany" }] };
+      43 +            var jens = new Author { Name = "Jens Meinicke", Aff
+         +iliations = [new() { Name = "University of Magdeburg", City = "
+         +Magdeburg", Country = "Germany" }] };
+      44 +            var thomasL = new Author { Name = "Thomas Leich", A
+         +ffiliations = [new() { Name = "Metop GmbH", City = "Magdeburg",
+         + Country = "Germany" }] };
+      45 +            var jude = new Author { Name = "Jude Gyimah", Affil
+         +iations = [chalmers] };
+      46 +            var kevin = new Author { Name = "Kevin Hermann", Af
+         +filiations = [chalmers] };
+      47 +            var janPhilipp = new Author { Name = "Jan-Philipp S
+         +teghöfer", Affiliations = [chalmers] };
+      48 +            var ahmad = new Author { Name = "Ahmad Al Shihabi",
+         + Affiliations = [rub] };
+      49 +            var jan = new Author { Name = "Jan Sollmann", Affil
+         +iations = [rub] };
+      50 +            var rafael = new Author { Name = "Rafael Capilla",
+         +Affiliations = [new() { Name = "Rey Juan Carlos University", Ci
+         +ty = "Madrid", Country = "Spain" }] };
+      51 +            // &end[Authors]
+      52 +
+      53              db.Papers.AddRange(
+      54                  new Paper
+      55                  {
+     ...
+      57                      Year = 2021,
+      58                      Abstract = "Presents HAnS, an IntelliJ plug
+          in for editing embedded feature annotations in source code, pro
+          viding features such as code completion, navigation, and consis
+          tency checking.",
+      59                      Doi = null,
+      19 -                    Authors =
+      20 -                    [
+      21 -                        new() { Name = "A. Developer", Email
+         - = null, Affiliations = [new() { Name = "Chalmers University of
+         - Technology", City = "Gothenburg", Country = "Sweden" }] },
+      22 -                        new() { Name = "Herman Jansson", Email
+         -= null, Affiliations = [new() { Name = "Chalmers University of
+         -Technology", City = "Gothenburg", Country = "Sweden" }] },
+      23 -                        new() { Name = "Mukelabai Mukelabai", E
+         -mail = null, Affiliations = [new() { Name = "Chalmers Universit
+         -y of Technology", City = "Gothenburg", Country = "Sweden" }] },
+      24 -                        new() { Name = "Thorsten Berger", Email
+         - = null, Affiliations = [new() { Name = "Chalmers University of
+         - Technology", City = "Gothenburg", Country = "Sweden" }] },
+      25 -                        new() { Name = "Alexandre Bergel", Emai
+         -l = null, Affiliations = [new() { Name = "University of Chile",
+         - City = "Santiago", Country = "Chile" }] },
+      26 -                        new() { Name = "Truong Ho-Quang", Email
+         - = null, Affiliations = [new() { Name = "Chalmers University of
+         - Technology", City = "Gothenburg", Country = "Sweden" }] },
+      27 -                    ]
+      60 +                    Authors = [johan, herman, mukelabai, thorst
+         +en, alexandre, truong]
+      61                  },
+      62                  new Paper
+      63                  {
+     ...
+      65                      Year = 2015,
+      66                      Abstract = "Reports a qualitative study inv
+          estigating what practitioners consider to be features in indust
+          rial software product lines across multiple companies.",
+      67                      Doi = null,
+      35 -                    Authors =
+      36 -                    [
+      37 -                        new() { Name = "Thorsten Berger", Email
+         - = null, Affiliations = [new() { Name = "Chalmers University of
+         - Technology", City = "Gothenburg", Country = "Sweden" }] },
+      38 -                        new() { Name = "Daniela Lettner", Email
+         - = null, Affiliations = [new() { Name = "Johannes Kepler Univer
+         -sity Linz", City = "Linz", Country = "Austria" }] },
+      39 -                        new() { Name = "Julia Rubin", Email = n
+         -ull, Affiliations = [new() { Name = "University of British Colu
+         -mbia", City = "Vancouver", Country = "Canada" }] },
+      40 -                        new() { Name = "Paul Grünbacher", Email
+         - = null, Affiliations = [new() { Name = "Johannes Kepler Univer
+         -sity Linz", City = "Linz", Country = "Austria" }] },
+      41 -                        new() { Name = "Adeline Silva", Email =
+         - null, Affiliations = [] },
+      42 -                        new() { Name = "Martin Becker", Email =
+         - null, Affiliations = [] },
+      43 -                        new() { Name = "Marsha Chechik", Email
+         -= null, Affiliations = [new() { Name = "University of Toronto",
+         - City = "Toronto", Country = "Canada" }] },
+      44 -                        new() { Name = "Krzysztof Czarnecki", E
+         -mail = null, Affiliations = [new() { Name = "University of Wate
+         -rloo", City = "Waterloo", Country = "Canada" }] },
+      45 -                    ]
+      68 +                    Authors = [thorsten, daniela, julia, paul,
+         +adeline, martin, marsha, krzysztof]
+      69                  },
+      70                  new Paper
+      71                  {
+     ...
+      73                      Year = 2011,
+      74                      Abstract = "Presents LEADT, a tool for mini
+          ng feature-to-code mappings from preprocessor-based software pr
+          oduct lines.",
+      75                      Doi = null,
+      53 -                    Authors =
+      54 -                    [
+      55 -                        new() { Name = "Christian Kästner", Ema
+         -il = null, Affiliations = [new() { Name = "Philipps-Universität
+         - Marburg", City = "Marburg", Country = "Germany" }] },
+      56 -                        new() { Name = "Alexander Dreiling", Em
+         -ail = null, Affiliations = [new() { Name = "Philipps-Universitä
+         -t Marburg", City = "Marburg", Country = "Germany" }] },
+      57 -                        new() { Name = "Klaus Ostermann", Email
+         - = null, Affiliations = [new() { Name = "Philipps-Universität M
+         -arburg", City = "Marburg", Country = "Germany" }] },
+      58 -                    ]
+      76 +                    Authors = [christian, alexander, klaus]
+      77                  },
+      78                  new Paper
+      79                  {
+     ...
+      81                      Year = 2013,
+      82                      Abstract = "A comprehensive textbook coveri
+          ng the theory and practice of feature-oriented software product
+           lines, including feature modeling, variability implementation,
+           and product derivation.",
+      83                      Doi = "10.1007/978-3-642-37521-7",
+      66 -                    Authors =
+      67 -                    [
+      68 -                        new() { Name = "Sven Apel", Email = nul
+         -l, Affiliations = [new() { Name = "University of Passau", City
+         -= "Passau", Country = "Germany" }] },
+      69 -                        new() { Name = "Don Batory", Email = nu
+         -ll, Affiliations = [new() { Name = "University of Texas at Aust
+         -in", City = "Austin", Country = "USA" }] },
+      70 -                        new() { Name = "Christian Kästner", Ema
+         -il = null, Affiliations = [new() { Name = "Carnegie Mellon Univ
+         -ersity", City = "Pittsburgh", Country = "USA" }] },
+      71 -                        new() { Name = "Gunter Saake", Email =
+         -null, Affiliations = [new() { Name = "University of Magdeburg",
+         - City = "Magdeburg", Country = "Germany" }] },
+      72 -                    ]
+      84 +                    Authors = [sven, don, christian, gunter]
+      85                  },
+      86                  new Paper
+      87                  {
+     ...
+      89                      Year = 1990,
+      90                      Abstract = "Introduces Feature-Oriented Dom
+          ain Analysis, a method for identifying and organizing the featu
+          res of software systems in a domain to support reuse.",
+      91                      Doi = null,
+      80 -                    Authors =
+      81 -                    [
+      82 -                        new() { Name = "Kyo Kang", Email = null
+         -, Affiliations = [new() { Name = "Software Engineering Institut
+         -e", City = "Pittsburgh", Country = "USA" }, new() { Name = "Car
+         -negie Mellon University", City = "Pittsburgh", Country = "USA"
+         -}] },
+      83 -                        new() { Name = "Sholom Cohen", Email =
+         -null, Affiliations = [new() { Name = "Software Engineering Inst
+         -itute", City = "Pittsburgh", Country = "USA" }] },
+      84 -                        new() { Name = "James Hess", Email = nu
+         -ll, Affiliations = [new() { Name = "Software Engineering Instit
+         -ute", City = "Pittsburgh", Country = "USA" }] },
+      85 -                        new() { Name = "William Nowak", Email =
+         - null, Affiliations = [new() { Name = "Software Engineering Ins
+         -titute", City = "Pittsburgh", Country = "USA" }] },
+      86 -                        new() { Name = "Spencer Peterson", Emai
+         -l = null, Affiliations = [new() { Name = "Software Engineering
+         -Institute", City = "Pittsburgh", Country = "USA" }] },
+      87 -                    ]
+      92 +                    Authors = [kyo, sholom, james, william, spe
+         +ncer]
+      93                  },
+      94                  new Paper
+      95                  {
+     ...
+       97                      Year = 2014,
+       98                      Abstract = "Presents FeatureIDE, an Eclips
+           e-based framework that supports all phases of feature-oriented
+            software development, from domain analysis to product derivat
+           ion.",
+       99                      Doi = null,
+       95 -                    Authors =
+       96 -                    [
+       97 -                        new() { Name = "Thomas Thüm", Email =
+          -null, Affiliations = [new() { Name = "University of Magdeburg"
+          -, City = "Magdeburg", Country = "Germany" }] },
+       98 -                        new() { Name = "Christian Kästner", Em
+          -ail = null, Affiliations = [new() { Name = "Carnegie Mellon Un
+          -iversity", City = "Pittsburgh", Country = "USA" }] },
+       99 -                        new() { Name = "Fabian Benduhn", Email
+          - = null, Affiliations = [new() { Name = "University of Magdebu
+          -rg", City = "Magdeburg", Country = "Germany" }] },
+      100 -                        new() { Name = "Jens Meinicke", Email
+          -= null, Affiliations = [new() { Name = "University of Magdebur
+          -g", City = "Magdeburg", Country = "Germany" }] },
+      101 -                        new() { Name = "Gunter Saake", Email =
+          - null, Affiliations = [new() { Name = "University of Magdeburg
+          -", City = "Magdeburg", Country = "Germany" }] },
+      102 -                        new() { Name = "Thomas Leich", Email =
+          - null, Affiliations = [new() { Name = "Metop GmbH", City = "Ma
+          -gdeburg", Country = "Germany" }] },
+      103 -                    ]
+      100 +                    Authors = [thomas, christian, fabian, jens
+          +, gunter, thomasL]
+      101                  },
+      102                  new Paper
+      103                  {
+     ...
+      105                      Year = 2025,
+      106                      Abstract = "Presents FM-PRO, an empiricall
+           y grounded process for feature modeling in software product li
+           nes, evaluated through a multi-year industrial case study.",
+      107                      Doi = "10.1109/TSE.2024.3513635",
+      111 -                    Authors =
+      112 -                    [
+      113 -                        new() { Name = "A. Developer", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      114 -                        new() { Name = "Wardah Mahmood", Email
+          - = null, Affiliations = [new() { Name = "Chalmers University o
+          -f Technology", City = "Gothenburg", Country = "Sweden" }] },
+      115 -                        new() { Name = "Jude Gyimah", Email =
+          -null, Affiliations = [new() { Name = "Chalmers University of T
+          -echnology", City = "Gothenburg", Country = "Sweden" }] },
+      116 -                        new() { Name = "Thorsten Berger", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      117 -                    ]
+      108 +                    Authors = [johan, wardah, jude, thorsten]
+      109                  },
+      110                  new Paper
+      111                  {
+     ...
+      113                      Year = 2023,
+      114                      Abstract = "Presents FeatRacer, an approac
+           h and tool for locating features in source code through assist
+           ed traceability, combining automated analysis with human guida
+           nce.",
+      115                      Doi = "10.1109/TSE.2023.3290613",
+      125 -                    Authors =
+      126 -                    [
+      127 -                        new() { Name = "Mukelabai Mukelabai",
+          -Email = null, Affiliations = [new() { Name = "Chalmers Univers
+          -ity of Technology", City = "Gothenburg", Country = "Sweden" }]
+          - },
+      128 -                        new() { Name = "Kevin Hermann", Email
+          -= null, Affiliations = [new() { Name = "Chalmers University of
+          - Technology", City = "Gothenburg", Country = "Sweden" }] },
+      129 -                        new() { Name = "Thorsten Berger", Emai
+          -l = null, Affiliations = [new() { Name = "Chalmers University
+          -of Technology", City = "Gothenburg", Country = "Sweden" }] },
+      130 -                        new() { Name = "Jan-Philipp Steghöfer"
+          -, Email = null, Affiliations = [new() { Name = "Chalmers Unive
+          -rsity of Technology", City = "Gothenburg", Country = "Sweden"
+          -}] },
+      131 -                    ]
+      116 +                    Authors = [mukelabai, kevin, thorsten, jan
+          +Philipp]
+      117                  },
+      118                  // &begin[Groups]
+      119                  new Paper
+     ...
+      122                      Year = 2024,
+      123                      Abstract = "Reports exploratory experiment
+           s on using large language models to featurize software; define
+           s featurization precisely and determines the potential and lim
+           itations of current LLMs for this task.",
+      124                      Doi = null,
+      140 -                    Authors =
+      141 -                    [
+      142 -                        new() { Name = "A. Developer", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      143 -                        new() { Name = "Thorsten Berger", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      144 -                    ]
+      125 +                    Authors = [johan, thorsten]
+      126                  },
+      127                  new Paper
+      128                  {
+     ...
+      130                      Year = 2024,
+      131                      Abstract = "Presents an extension of HAnS
+           with clone management capabilities using a lightweight trace d
+           atabase to support synchronization of cloned assets across sof
+           tware product line variants.",
+      132                      Doi = null,
+      152 -                    Authors =
+      153 -                    [
+      154 -                        new() { Name = "A. Developer", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      155 -                        new() { Name = "Ahmad Al Shihabi", Ema
+          -il = null, Affiliations = [new() { Name = "Ruhr-Universität Bo
+          -chum", City = "Bochum", Country = "Germany" }] },
+      156 -                        new() { Name = "Jan Sollmann", Email =
+          - null, Affiliations = [new() { Name = "Ruhr-Universität Bochum
+          -", City = "Bochum", Country = "Germany" }] },
+      157 -                        new() { Name = "Wardah Mahmood", Email
+          - = null, Affiliations = [new() { Name = "Chalmers University o
+          -f Technology", City = "Gothenburg", Country = "Sweden" }] },
+      158 -                        new() { Name = "Thorsten Berger", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      159 -                    ]
+      133 +                    Authors = [johan, ahmad, jan, wardah, thor
+          +sten]
+      134                  },
+      135                  new Paper
+      136                  {
+     ...
+      138                      Year = 2025,
+      139                      Abstract = "Presents a feature evolution t
+           imeline IntelliJ plugin that visualizes feature evolution via
+           traceability links and commit history, lifting abstraction to
+           the feature level; validated through three action research cyc
+           les and a controlled experiment.",
+      140                      Doi = null,
+      167 -                    Authors =
+      168 -                    [
+      169 -                        new() { Name = "A. Developer", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      170 -                        new() { Name = "Thorsten Berger", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      171 -                    ]
+      141 +                    Authors = [johan, thorsten]
+      142                  },
+      143                  new Paper
+      144                  {
+     ...
+      146                      Year = 2025,
+      147                      Abstract = "Presents HAnS-viz, an IntelliJ
+            plugin providing feature-oriented visualizations that build o
+           n HAnS embedded annotations to lift code-level assets to featu
+           re-level representations.",
+      148                      Doi = null,
+      179 -                    Authors =
+      180 -                    [
+      181 -                        new() { Name = "A. Developer", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      182 -                        new() { Name = "Thorsten Berger", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      183 -                    ]
+      149 +                    Authors = [johan, thorsten]
+      150                  },
+      151                  new Paper
+      152                  {
+     ...
+      154                      Year = 2026,
+      155                      Abstract = "Proposes a framework for decen
+           tralized feature modeling; studies core concerns including pla
+           cement, scope, cross-model dependencies, reuse, and integratio
+           n through a 15-year systematic literature review.",
+      156                      Doi = null,
+      191 -                    Authors =
+      192 -                    [
+      193 -                        new() { Name = "A. Developer", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      194 -                        new() { Name = "Wardah Mahmood", Email
+          - = null, Affiliations = [new() { Name = "Chalmers University o
+          -f Technology", City = "Gothenburg", Country = "Sweden" }] },
+      195 -                        new() { Name = "Mukelabai Mukelabai",
+          -Email = null, Affiliations = [new() { Name = "Ruhr-Universität
+          - Bochum", City = "Bochum", Country = "Germany" }] },
+      196 -                        new() { Name = "Rafael Capilla", Email
+          - = null, Affiliations = [new() { Name = "Rey Juan Carlos Unive
+          -rsity", City = "Madrid", Country = "Spain" }] },
+      197 -                        new() { Name = "Thorsten Berger", Emai
+          -l = null, Affiliations = [new() { Name = "Ruhr-Universität Boc
+          -hum", City = "Bochum", Country = "Germany" }] },
+      198 -                    ]
+      157 +                    Authors = [johan, wardah, mukelabai, rafae
+          +l, thorsten]
+      158                  }
+      159                  // &end[Groups]
+      160              );
+
+● Now register MapAuthorEndpoints in Program.cs.
+
+● Update(Program.cs)
+  ⎿  Added 1 line
+      38
+      39  var v1 = app.MapGroup("/api/v1"); // &line[Versioning]
+      40  v1.MapPaperEndpoints();
+      41 +v1.MapAuthorEndpoints(); // &line[Authors]
+      42  v1.MapGroupEndpoints(); // &line[Groups]
+      43  v1.MapFavoriteEndpoints(); // &line[Favorites]
+      44
+
+● Now update .feature-model to add the Authors subtree.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(.feature-model)
+  ⎿  Added 6 lines
+       9          DeletePaper
+      10          ImportBibtex
+      11          ExportBibtex
+      12 +    Authors
+      13 +        CreateAuthor
+      14 +        GetAuthor
+      15 +        ListAuthors
+      16 +        UpdateAuthor
+      17 +        DeleteAuthor
+      18      Groups
+      19          CreateGroup
+      20          GetGroup
+
+● Now build to see if code compiles before generating migration.
+
+● Bash(dotnet build 2>&1 | tail -20)
+  ⎿    Determining projects to restore...
+       All projects are up-to-date for restore.
+       ReferenceManager -> src/2026-ase-agentic-featurizat
+     … +26 lines (ctrl+o to expand)
+
+● Build clean. Generate migration.
+
+● Bash(dotnet ef migrations add StandaloneAuthors 2>&1)
+  ⎿  Build started...
+     Build succeeded.
+     An operation was scaffolded that may result in the loss of data. Pleas
+     … +2 lines (ctrl+o to expand)
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+● Need to reorder the migration: create tables → migrate data → drop column.
+  Editing now.
+
+● Write(Migrations/20260427094357_StandaloneAuthors.cs)
+  ⎿  Added 27 lines, removed 5 lines
+      1 -using Microsoft.EntityFrameworkCore.Migrations;
+      1 +using Microsoft.EntityFrameworkCore.Migrations;
+      2
+      3  #nullable disable
+      4
+     ...
+      10          /// <inheritdoc />
+      11          protected override void Up(MigrationBuilder migrationBu
+          ilder)
+      12          {
+      13 -            migrationBuilder.DropColumn(
+      14 -                name: "Authors",
+      15 -                table: "Papers");
+      16 -
+      13              migrationBuilder.CreateTable(
+      14                  name: "Authors",
+      15                  columns: table => new
+     ...
+      53                  name: "IX_PaperAuthor_PapersId",
+      54                  table: "PaperAuthor",
+      55                  column: "PapersId");
+      56 +
+      57 +            // Migrate existing authors from JSON column to sta
+         +ndalone rows
+      58 +            migrationBuilder.Sql(@"
+      59 +                INSERT INTO Authors (Name, Email, Affiliations)
+      60 +                SELECT
+      61 +                    json_extract(a.value, '$.name'),
+      62 +                    json_extract(a.value, '$.email'),
+      63 +                    COALESCE(json_extract(a.value, '$.affiliati
+         +ons'), '[]')
+      64 +                FROM Papers p, json_each(p.Authors) a
+      65 +                WHERE p.Authors IS NOT NULL
+      66 +                  AND json_extract(a.value, '$.name') IS NOT NU
+         +LL
+      67 +                GROUP BY lower(json_extract(a.value, '$.name'))
+         +;
+      68 +            ");
+      69 +
+      70 +            migrationBuilder.Sql(@"
+      71 +                INSERT INTO PaperAuthor (AuthorsId, PapersId)
+      72 +                SELECT au.Id, p.Id
+      73 +                FROM Papers p, json_each(p.Authors) a
+      74 +                JOIN Authors au ON lower(au.Name) = lower(json_
+         +extract(a.value, '$.name'))
+      75 +                WHERE p.Authors IS NOT NULL
+      76 +                  AND json_extract(a.value, '$.name') IS NOT NU
+         +LL;
+      77 +            ");
+      78 +
+      79 +            migrationBuilder.DropColumn(
+      80 +                name: "Authors",
+      81 +                table: "Papers");
+      82          }
+      83
+      84          /// <inheritdoc />
+
+● Now add tests for the Author endpoints, then run all tests.
+
+● Write(ReferenceManager.Tests/AuthorEndpointTests.cs)
+  ⎿  Wrote 116 lines to ReferenceManager.Tests/AuthorEndpointTests.cs
+       2 using System.Net.Http.Json;
+       3 using ReferenceManager.Models;
+       4 using ReferenceManager.Requests;
+       5 using Xunit;
+       6
+       7 namespace ReferenceManager.Tests;
+       8
+       9 // &begin[Authors]
+      10 public class AuthorEndpointTests(CustomWebApplicationFactory fac
+         tory)
+     … +133 lines (ctrl+o to expand)
+
+● Bash(dotnet test 2>&1 | tail -40)
+  ⎿    Determining projects to restore...
+       All projects are up-to-date for restore.
+       ReferenceManager -> src/2026-ase-agentic-featurizat
+     … +14 lines (ctrl+o to expand)
+
+● All 39 tests pass (was 30 before — 9 new Author tests). Now update the feature
+   model file and display summary.
+  Called fm-gui (ctrl+o to expand)
+
+● All 39 tests pass. Summary of changes:
+
+  Model changes
+  - Author → standalone entity with Id + List<Paper> Papers nav
+  - Affiliation stays JSON-owned by Author
+  - Paper.Authors → many-to-many nav (no longer JSON column)
+
+  New: AuthorEndpoints.cs
+  - GET /authors — list all
+  - GET /authors/{id} — get single
+  - POST /authors — create (409 if name exists)
+  - PUT /authors/{id} — update
+  - DELETE /authors/{id} — delete
+  - GetOrCreateAsync helper with local cache for batch operations
+
+  Updated endpoints
+  - CreatePaper / UpdatePaper / ImportBibtex → all use GetOrCreateAsync by name
+  (case-insensitive)
+  - GetPaper / ListPapers → now Include(p => p.Authors)
+
+  Migration StandaloneAuthors
+  - Creates Authors table + PaperAuthor join table
+  - Data migration SQL: extracts authors from JSON column, deduplicates by name,
+   links via join table
+  - Then drops the old Authors JSON column from Papers
+
+  Feature model — added Authors subtree with 5 children
+
+✻ Crunched for 7m 25s
+
+❯ please fix the sample data so that I can test
+
+● Checking if DB exists and if seeder has issues with shared Affiliation
+  instances.
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+● Old DB has pre-migration schema. Deleting it so app reseeds fresh with
+  standalone authors.
+
+● Bash(rm ./r
+      eferences.db)
+  ⎿  Done
+
+● Also fixing seeder to not share Affiliation instances — EF Core owned entities
+   can't be shared across parents.
+
+● Update(Data/DbSeeder.cs)
+  ⎿  Added 13 lines, removed 13 lines
+      10          if (!await db.Papers.AnyAsync())
+      11          {
+      12              // &begin[Authors]
+      13 -            var chalmers = new Affiliation { Name = "Chalmers U
+         -niversity of Technology", City = "Gothenburg", Country = "Swede
+         -n" };
+      14 -            var rub = new Affiliation { Name = "Ruhr-Universitä
+         -t Bochum", City = "Bochum", Country = "Germany" };
+      13 +            static Affiliation Chalmers() => new() { Name = "Ch
+         +almers University of Technology", City = "Gothenburg", Country
+         += "Sweden" };
+      14 +            static Affiliation Rub() => new() { Name = "Ruhr-Un
+         +iversität Bochum", City = "Bochum", Country = "Germany" };
+      15
+      16 -            var johan = new Author { Name = "A. Developer",
+         -Affiliations = [rub] };
+      17 -            var thorsten = new Author { Name = "Thorsten Berger
+         -", Affiliations = [rub] };
+      18 -            var mukelabai = new Author { Name = "Mukelabai Muke
+         -labai", Affiliations = [chalmers] };
+      19 -            var wardah = new Author { Name = "Wardah Mahmood",
+         -Affiliations = [chalmers] };
+      20 -            var herman = new Author { Name = "Herman Jansson",
+         -Affiliations = [chalmers] };
+      16 +            var johan = new Author { Name = "A. Developer",
+         +Affiliations = [Rub()] };
+      17 +            var thorsten = new Author { Name = "Thorsten Berger
+         +", Affiliations = [Rub()] };
+      18 +            var mukelabai = new Author { Name = "Mukelabai Muke
+         +labai", Affiliations = [Chalmers()] };
+      19 +            var wardah = new Author { Name = "Wardah Mahmood",
+         +Affiliations = [Chalmers()] };
+      20 +            var herman = new Author { Name = "Herman Jansson",
+         +Affiliations = [Chalmers()] };
+      21              var alexandre = new Author { Name = "Alexandre Berg
+          el", Affiliations = [new() { Name = "University of Chile", City
+           = "Santiago", Country = "Chile" }] };
+      22 -            var truong = new Author { Name = "Truong Ho-Quang",
+         - Affiliations = [chalmers] };
+      22 +            var truong = new Author { Name = "Truong Ho-Quang",
+         + Affiliations = [Chalmers()] };
+      23              var daniela = new Author { Name = "Daniela Lettner"
+          , Affiliations = [new() { Name = "Johannes Kepler University Li
+          nz", City = "Linz", Country = "Austria" }] };
+      24              var julia = new Author { Name = "Julia Rubin", Affi
+          liations = [new() { Name = "University of British Columbia", Ci
+          ty = "Vancouver", Country = "Canada" }] };
+      25              var paul = new Author { Name = "Paul Grünbacher", A
+          ffiliations = [new() { Name = "Johannes Kepler University Linz"
+          , City = "Linz", Country = "Austria" }] };
+     ...
+      42              var fabian = new Author { Name = "Fabian Benduhn",
+          Affiliations = [new() { Name = "University of Magdeburg", City
+          = "Magdeburg", Country = "Germany" }] };
+      43              var jens = new Author { Name = "Jens Meinicke", Aff
+          iliations = [new() { Name = "University of Magdeburg", City = "
+          Magdeburg", Country = "Germany" }] };
+      44              var thomasL = new Author { Name = "Thomas Leich", A
+          ffiliations = [new() { Name = "Metop GmbH", City = "Magdeburg",
+           Country = "Germany" }] };
+      45 -            var jude = new Author { Name = "Jude Gyimah", Affil
+         -iations = [chalmers] };
+      46 -            var kevin = new Author { Name = "Kevin Hermann", Af
+         -filiations = [chalmers] };
+      47 -            var janPhilipp = new Author { Name = "Jan-Philipp S
+         -teghöfer", Affiliations = [chalmers] };
+      48 -            var ahmad = new Author { Name = "Ahmad Al Shihabi",
+         - Affiliations = [rub] };
+      49 -            var jan = new Author { Name = "Jan Sollmann", Affil
+         -iations = [rub] };
+      45 +            var jude = new Author { Name = "Jude Gyimah", Affil
+         +iations = [Chalmers()] };
+      46 +            var kevin = new Author { Name = "Kevin Hermann", Af
+         +filiations = [Chalmers()] };
+      47 +            var janPhilipp = new Author { Name = "Jan-Philipp S
+         +teghöfer", Affiliations = [Chalmers()] };
+      48 +            var ahmad = new Author { Name = "Ahmad Al Shihabi",
+         + Affiliations = [Rub()] };
+      49 +            var jan = new Author { Name = "Jan Sollmann", Affil
+         +iations = [Rub()] };
+      50              var rafael = new Author { Name = "Rafael Capilla",
+          Affiliations = [new() { Name = "Rey Juan Carlos University", Ci
+          ty = "Madrid", Country = "Spain" }] };
+      51              // &end[Authors]
+      52
+
+● Bash(dotnet test 2>&1 | tail -10)
+  ⎿    Determining projects to restore...
+       All projects are up-to-date for restore.
+       ReferenceManager -> src/2026-ase-agentic-featurizat
+     … +18 lines (ctrl+o to expand)
+
+● Bash(dotnet build --no-incremental 2>&1 | grep -E
+      "error|warning|succeeded|failed" | tail -10 && dotnet test --no-build 2>&1
+       | tail -8)
+  ⎿  /usr/lib/dotnet/sdk/9.0.111/Microsoft.Common.CurrentVersion.targets(53
+     22,5): error MSB3030: Could not copy the file "src/20
+     26-ase-agentic-featurization/ReferenceManager/ReferenceManager.Tests/b
+     … +73 lines (ctrl+o to expand)
+
+● Bash(dotnet test ReferenceManager.Tests/ReferenceManager.Tests.csproj 2>&1 |
+      tail -8)
+  ⎿    ReferenceManager.Tests -> src/2026-ase-agentic-feat
+     urization/ReferenceManager/ReferenceManager.Tests/bin/Debug/net9.0/Ref
+     erenceManager.Tests.dll
+     … +10 lines (ctrl+o to expand)
+
+● 39/39 pass. Two fixes applied:
+
+  1. Deleted references.db — app recreates it fresh on next start, running all
+  migrations and the new seeder
+  2. Fixed shared Affiliation instances in seeder — now uses Chalmers() / Rub()
+  factory methods so each Author gets its own instance (required for EF Core
+  owned entities)
+
+✻ Brewed for 2m 53s
+
+※ recap: Refactored Authors into standalone managed entities with CRUD endpoints and dedup-by-name logic. Deleted the old database so it reseeds fresh on next app start. Ready to commit. (disable recaps in /config)
+
+❯ Add an endpoint to merge two duplicate authors — given two author IDs,
+  reassign all paper references to one and delete the other.
+
+● Bash(git status)
+  ⎿  On branch main
+     Changes not staged for commit:
+       (use "git add <file>..." to update what will be committed)
+     … +21 lines (ctrl+o to expand)
+
+  Called fm-gui (ctrl+o to expand)
+
+● Uncommitted changes from previous work. Commit before proceeding?
+
+❯ no
+
+● Skill(feature-model)
+  ⎿  Successfully loaded skill
+
+● Skill(embedded-feature-annotation)  ⎿  Successfully loaded skill
+
+● Adding MergeAuthors to feature model, then implementing.
+
+● Update(.feature-model)
+  ⎿  Added 1 line
+      15          ListAuthors
+      16          UpdateAuthor
+      17          DeleteAuthor
+      18 +        MergeAuthors
+      19      Groups
+      20          CreateGroup
+      21          GetGroup
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(Endpoints/AuthorEndpoints.cs)
+  ⎿  Added 23 lines
+       73          .WithName("DeleteAuthor")
+       74          .WithOpenApi();
+       75          // &end[DeleteAuthor]
+       76 +
+       77 +        // &begin[MergeAuthors]
+       78 +        app.MapPost("/authors/{keepId:int}/merge/{mergeId:int}
+          +", async (int keepId, int mergeId, AppDbContext db) =>
+       79 +        {
+       80 +            if (keepId == mergeId) return Results.BadRequest("
+          +Cannot merge author with itself.");
+       81 +
+       82 +            var keep = await db.Authors.Include(a => a.Papers)
+          +.FirstOrDefaultAsync(a => a.Id == keepId);
+       83 +            var merge = await db.Authors.Include(a => a.Papers
+          +).FirstOrDefaultAsync(a => a.Id == mergeId);
+       84 +            if (keep is null || merge is null) return Results.
+          +NotFound();
+       85 +
+       86 +            foreach (var paper in merge.Papers)
+       87 +            {
+       88 +                if (!keep.Papers.Any(p => p.Id == paper.Id))
+       89 +                    keep.Papers.Add(paper);
+       90 +            }
+       91 +
+       92 +            db.Authors.Remove(merge);
+       93 +            await db.SaveChangesAsync();
+       94 +            return Results.Ok(keep);
+       95 +        })
+       96 +        .WithName("MergeAuthors")
+       97 +        .WithOpenApi();
+       98 +        // &end[MergeAuthors]
+       99      }
+      100
+      101      // &begin[Authors]
+
+● Now add tests.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(ReferenceManager.Tests/AuthorEndpointTests.cs)
+  ⎿  Added 74 lines
+      112          Assert.Single(p1.Authors); Assert.Single(p2.Authors);
+      113          Assert.Equal(p1.Authors[0].Id, p2.Authors[0].Id);
+      114      }
+      115 +    // &begin[MergeAuthors]
+      116 +    [Fact]
+      117 +    public async Task MergeAuthors_ReassignesPapersToKeepAndDe
+          +letesMerge()
+      118 +    {
+      119 +        var keepReq = new AuthorRequest($"Keep {Guid.NewGuid()
+          +}", null, []);
+      120 +        var mergeReq = new AuthorRequest($"Merge {Guid.NewGuid
+          +()}", null, []);
+      121 +        var keep = await (await _client.PostAsJsonAsync("/api/
+          +v1/authors", keepReq)).Content.ReadFromJsonAsync<Author>();
+      122 +        var merge = await (await _client.PostAsJsonAsync("/api
+          +/v1/authors", mergeReq)).Content.ReadFromJsonAsync<Author>();
+      123 +        Assert.NotNull(keep); Assert.NotNull(merge);
+      124 +
+      125 +        // Create a paper attributed to the merge author
+      126 +        var paperReq = new PaperRequest($"Paper {Guid.NewGuid(
+          +)}", [new AuthorRequest(mergeReq.Name, null, [])], 2024, null,
+          + null, null, null);
+      127 +        await _client.PostAsJsonAsync("/api/v1/papers", paperR
+          +eq);
+      128 +
+      129 +        var response = await _client.PostAsync($"/api/v1/autho
+          +rs/{keep.Id}/merge/{merge.Id}", null);
+      130 +
+      131 +        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+      132 +        var result = await response.Content.ReadFromJsonAsync<
+          +Author>();
+      133 +        Assert.NotNull(result);
+      134 +        Assert.Equal(keep.Id, result.Id);
+      135 +        Assert.NotEmpty(result.Papers);
+      136 +
+      137 +        // Merge author should be gone
+      138 +        var getDeleted = await _client.GetAsync($"/api/v1/auth
+          +ors/{merge.Id}");
+      139 +        Assert.Equal(HttpStatusCode.NotFound, getDeleted.Statu
+          +sCode);
+      140 +    }
+      141 +
+      142 +    [Fact]
+      143 +    public async Task MergeAuthors_NoDuplicatePaperLinks_WhenB
+          +othAlreadyOnSamePaper()
+      144 +    {
+      145 +        var keepReq = new AuthorRequest($"KeepShared {Guid.New
+          +Guid()}", null, []);
+      146 +        var mergeReq = new AuthorRequest($"MergeShared {Guid.N
+          +ewGuid()}", null, []);
+      147 +        var keep = await (await _client.PostAsJsonAsync("/api/
+          +v1/authors", keepReq)).Content.ReadFromJsonAsync<Author>();
+      148 +        var merge = await (await _client.PostAsJsonAsync("/api
+          +/v1/authors", mergeReq)).Content.ReadFromJsonAsync<Author>();
+      149 +        Assert.NotNull(keep); Assert.NotNull(merge);
+      150 +
+      151 +        // Paper has both authors
+      152 +        var paperReq = new PaperRequest($"SharedPaper {Guid.Ne
+          +wGuid()}",
+      153 +            [new AuthorRequest(keepReq.Name, null, []), new Au
+          +thorRequest(mergeReq.Name, null, [])],
+      154 +            2024, null, null, null, null);
+      155 +        await _client.PostAsJsonAsync("/api/v1/papers", paperR
+          +eq);
+      156 +
+      157 +        var response = await _client.PostAsync($"/api/v1/autho
+          +rs/{keep.Id}/merge/{merge.Id}", null);
+      158 +
+      159 +        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+      160 +        var result = await response.Content.ReadFromJsonAsync<
+          +Author>();
+      161 +        Assert.NotNull(result);
+      162 +        Assert.Single(result.Papers);
+      163 +    }
+      164 +
+      165 +    [Fact]
+      166 +    public async Task MergeAuthors_SameId_ReturnsBadRequest()
+      167 +    {
+      168 +        var author = await (await _client.PostAsJsonAsync("/ap
+          +i/v1/authors",
+      169 +            new AuthorRequest($"Self {Guid.NewGuid()}", null,
+          +[]))).Content.ReadFromJsonAsync<Author>();
+      170 +        Assert.NotNull(author);
+      171 +
+      172 +        var response = await _client.PostAsync($"/api/v1/autho
+          +rs/{author.Id}/merge/{author.Id}", null);
+      173 +
+      174 +        Assert.Equal(HttpStatusCode.BadRequest, response.Statu
+          +sCode);
+      175 +    }
+      176 +
+      177 +    [Fact]
+      178 +    public async Task MergeAuthors_NonExistentId_ReturnsNotFou
+          +nd()
+      179 +    {
+      180 +        var author = await (await _client.PostAsJsonAsync("/ap
+          +i/v1/authors",
+      181 +            new AuthorRequest($"Real {Guid.NewGuid()}", null,
+          +[]))).Content.ReadFromJsonAsync<Author>();
+      182 +        Assert.NotNull(author);
+      183 +
+      184 +        var response = await _client.PostAsync($"/api/v1/autho
+          +rs/{author.Id}/merge/99999", null);
+      185 +
+      186 +        Assert.Equal(HttpStatusCode.NotFound, response.StatusC
+          +ode);
+      187 +    }
+      188 +    // &end[MergeAuthors]
+      189  }
+      190  // &end[Authors]
+
+● Bash(dotnet test ReferenceManager.Tests/ReferenceManager.Tests.csproj 2>&1 |
+      tail -8)
+  ⎿    Determining projects to restore...
+       All projects are up-to-date for restore.
+       ReferenceManager -> src/2026-ase-agentic-featurizat
+     … +22 lines (ctrl+o to expand)
+
+● Bash(dotnet test ReferenceManager.Tests/ReferenceManager.Tests.csproj 2>&1 |
+      tail -8)
+  ⎿    ReferenceManager.Tests -> src/2026-ase-agentic-feat
+     urization/ReferenceManager/ReferenceManager.Tests/bin/Debug/net9.0/Ref
+     erenceManager.Tests.dll
+     … +10 lines (ctrl+o to expand)
+
+● 43/43 pass. Showing summary.
+
+  Called fm-gui (ctrl+o to expand)
+
+● POST /authors/{keepId}/merge/{mergeId} — keeps keepId, reassigns all papers,
+  deletes mergeId.
+
+  - Already-shared papers skipped (no duplicate links)
+  - 400 on self-merge, 404 if either ID missing
+  - 4 new tests, all pass (43 total)
+
+✻ Baked for 1m 28s
+
+❯ Also make sure when authors are merged that affiliations are appended if they
+   are different. such that author x with affiliation bebas uni and author y
+  with affiliation abbas uni becomes author x with affiliations bebas uni and
+  abbas uni as two entires in that authors affiliation list.
+
+● Bash(git status --short)
+  ⎿   M .feature-model
+      M Data/AppDbContext.cs
+      M Data/DbSeeder.cs
+     … +11 lines (ctrl+o to expand)
+
+● Updating merge logic — new Affiliation instances (can't share owned entity
+  instances across owners), dedup by name.
+
+● Update(Endpoints/AuthorEndpoints.cs)
+  ⎿  Added 6 lines
+       89                      keep.Papers.Add(paper);
+       90              }
+       91
+       92 +            foreach (var aff in merge.Affiliations)
+       93 +            {
+       94 +                if (!keep.Affiliations.Any(a => a.Name.Equals(
+          +aff.Name, StringComparison.OrdinalIgnoreCase)))
+       95 +                    keep.Affiliations.Add(new Affiliation { Na
+          +me = aff.Name, Country = aff.Country, City = aff.City });
+       96 +            }
+       97 +
+       98              db.Authors.Remove(merge);
+       99              await db.SaveChangesAsync();
+      100              return Results.Ok(keep);
+
+● Add test for affiliation merging.
+
+● Update(ReferenceManager.Tests/AuthorEndpointTests.cs)
+  ⎿  Added 39 lines
+      163      }
+      164
+      165      [Fact]
+      166 +    public async Task MergeAuthors_AppendsDifferentAffiliation
+          +s()
+      167 +    {
+      168 +        var keepReq = new AuthorRequest($"AffKeep {Guid.NewGui
+          +d()}", null,
+      169 +            [new AffiliationRequest("Bebas Uni", "SE", "Stockh
+          +olm")]);
+      170 +        var mergeReq = new AuthorRequest($"AffMerge {Guid.NewG
+          +uid()}", null,
+      171 +            [new AffiliationRequest("Abbas Uni", "SE", "Gothen
+          +burg")]);
+      172 +        var keep = await (await _client.PostAsJsonAsync("/api/
+          +v1/authors", keepReq)).Content.ReadFromJsonAsync<Author>();
+      173 +        var merge = await (await _client.PostAsJsonAsync("/api
+          +/v1/authors", mergeReq)).Content.ReadFromJsonAsync<Author>();
+      174 +        Assert.NotNull(keep); Assert.NotNull(merge);
+      175 +
+      176 +        var response = await _client.PostAsync($"/api/v1/autho
+          +rs/{keep.Id}/merge/{merge.Id}", null);
+      177 +
+      178 +        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+      179 +        var result = await response.Content.ReadFromJsonAsync<
+          +Author>();
+      180 +        Assert.NotNull(result);
+      181 +        Assert.Equal(2, result.Affiliations.Count);
+      182 +        Assert.Contains(result.Affiliations, a => a.Name == "B
+          +ebas Uni");
+      183 +        Assert.Contains(result.Affiliations, a => a.Name == "A
+          +bbas Uni");
+      184 +    }
+      185 +
+      186 +    [Fact]
+      187 +    public async Task MergeAuthors_NoDuplicateAffiliations_Whe
+          +nSameName()
+      188 +    {
+      189 +        var sharedAff = new AffiliationRequest("Same Uni", "SE
+          +", "Stockholm");
+      190 +        var keepReq = new AuthorRequest($"AffDupKeep {Guid.New
+          +Guid()}", null, [sharedAff]);
+      191 +        var mergeReq = new AuthorRequest($"AffDupMerge {Guid.N
+          +ewGuid()}", null, [sharedAff]);
+      192 +        var keep = await (await _client.PostAsJsonAsync("/api/
+          +v1/authors", keepReq)).Content.ReadFromJsonAsync<Author>();
+      193 +        var merge = await (await _client.PostAsJsonAsync("/api
+          +/v1/authors", mergeReq)).Content.ReadFromJsonAsync<Author>();
+      194 +        Assert.NotNull(keep); Assert.NotNull(merge);
+      195 +
+      196 +        var response = await _client.PostAsync($"/api/v1/autho
+          +rs/{keep.Id}/merge/{merge.Id}", null);
+      197 +
+      198 +        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+      199 +        var result = await response.Content.ReadFromJsonAsync<
+          +Author>();
+      200 +        Assert.NotNull(result);
+      201 +        Assert.Single(result.Affiliations);
+      202 +    }
+      203 +
+      204 +    [Fact]
+      205      public async Task MergeAuthors_SameId_ReturnsBadRequest()
+      206      {
+      207          var author = await (await _client.PostAsJsonAsync("/ap
+           i/v1/authors",
+
+● Bash(dotnet test ReferenceManager.Tests/ReferenceManager.Tests.csproj 2>&1 |
+      tail -6)
+  ⎿  VSTest version 17.12.0 (x64)
+
+     Starting test execution, please wait...
+     … +4 lines (ctrl+o to expand)
+
+● 45/45 pass.
+
+  Called fm-gui (ctrl+o to expand)
+
+● (No message received — waiting for input.)
+
+✻ Cogitated for 1m 1s
