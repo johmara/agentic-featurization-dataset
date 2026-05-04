@@ -6,9 +6,10 @@ This dataset accompanies the paper *Greta: Keeping Feature Structure Visible in 
 
 ```
 dataset/
-  ReferenceManager/   C#/.NET 9 web API developed entirely through agentic coding
-  demonstration/      Transcripts of all 10 evolution steps with Greta active
-  README.md           This file
+  ReferenceManager/    C#/.NET 9 web API developed entirely through agentic coding
+  ReferenceManagerUI/  Single-page frontend for live demonstration
+  demonstration/       Transcripts of all 10 evolution steps with Greta active
+  README.md            This file
 ```
 
 ## ReferenceManager
@@ -24,6 +25,32 @@ cd dataset/ReferenceManager
 dotnet run
 # API + Scalar UI available at http://localhost:5062/scalar/v1
 ```
+
+## ReferenceManagerUI
+
+A single-file browser frontend (`ReferenceManagerUI/index.html`) for interacting with the API. No build step or Node.js required — open the file directly in a browser.
+
+### Run the demo
+
+1. Start the API:
+
+```bash
+cd dataset/ReferenceManager
+dotnet run
+# API running at http://localhost:5062
+```
+
+2. Open the frontend in a browser:
+
+```
+dataset/ReferenceManagerUI/index.html
+```
+
+The sidebar shows a green **Connected** indicator when the API is reachable. If the API runs on a different port, click the status indicator to change the URL.
+
+The UI covers all API features: paper CRUD, full-text search, BibTeX import/export, group management, and author management.
+
+---
 
 ### Run tests
 
