@@ -1,6 +1,4 @@
-# Greta Dataset — ReferenceManager Demonstration
-
-This dataset accompanies the paper *Greta: Keeping Feature Structure Visible in Agentic LLM Coding* (ASE 2026, Tools and Datasets track).
+# ReferenceManager Dataset
 
 ## Contents
 
@@ -8,13 +6,13 @@ This dataset accompanies the paper *Greta: Keeping Feature Structure Visible in 
 dataset/
   ReferenceManager/    C#/.NET 9 web API developed entirely through agentic coding
   ReferenceManagerUI/  Single-page frontend for live demonstration
-  demonstration/       Transcripts of all 10 evolution steps with Greta active
+  demonstration/       Transcripts of all 10 evolution steps
   README.md            This file
 ```
 
 ## ReferenceManager
 
-A web API for managing research paper references, built with .NET 9, Entity Framework Core, and SQLite. Developed entirely through agentic coding using Claude Code with Greta active from the first prompt.
+A web API for managing research paper references, built with .NET 9, Entity Framework Core, and SQLite. Developed entirely through agentic coding using Claude Code.
 
 **Final state**: 85 source files, 2 971 lines of C# application code, 25 features across four top-level concerns.
 
@@ -61,7 +59,7 @@ dotnet test
 
 ## Demonstration transcripts
 
-`demonstration/` contains one file per evolution step — verbatim transcripts of the agentic coding session, showing the developer prompt, Claude Code's tool calls and output, and Greta's automatic feature model update after each coding cycle.
+`demonstration/` contains one file per evolution step — verbatim transcripts of the agentic coding session, showing the developer prompt, Claude Code's tool calls and output, and the automatic feature model update after each coding cycle.
 
 | File | Evolution | Feature model change | Type |
 |------|-----------|---------------------|------|
